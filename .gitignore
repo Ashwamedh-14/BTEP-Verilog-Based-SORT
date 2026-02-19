@@ -1,5 +1,9 @@
-./proposal/main.*
-!./proposal/main.tex
+# Directories
+sort/
+
+# Files
+proposal/main.*
+!proposal/main.tex
 *.vvp
-.venv
-./sort/
+*.pdf
+*.jpeg
