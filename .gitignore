@@ -1,0 +1,5 @@
+./proposal/main.*
+!./proposal/main.tex
+*.vvp
+.venv
+./sort/
