@@ -7,3 +7,13 @@ proposal/main.*
 *.vvp
 *.pdf
 *.jpeg
+*.odp
+*.log
+
+## Tex Genrated Files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out

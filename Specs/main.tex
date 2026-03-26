@@ -1,0 +1,416 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsthm, graphicx, geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+\geometry{
+    margin = 1in
+}
+
+\setlength{\parskip}{1em}
+
+\title{Specifications for the Hardware}
+\author{Ayush Purohit}
+\date{\today}
+
+\begin{document}
+    \maketitle
+
+    \section{Introduction}
+    This documents is to set the exact specifications of the object tracking hardware designed by me which is based on the SORT algorithm.
+
+    \section{Assumptions}
+    The following are the assumptions made
+    \begin{itemize}
+        \item Input Image Size:- \( 640 \times 640\)
+        \item The image's cartesian plane will have its origin at the lower left corner. This ensures the whole image has positive co-ordinates at all times.
+        \item No cross correlation with X and Y coordinates.
+        \item The time step is taken to be equal to one frame interval.
+        \item Only a single object is being tracked at all times.
+    \end{itemize}
+
+    \section{Theory}
+    The sort algorithm involves the usage of a Kalman Filter to predict and update the position of an object. The algorithm takes a state vector 
+    \(\mathbf{x}\), along with a covariance matrix \(P_{7 \times 7}\). Along with that, it also tracks the age, number of hits, and time since the position was last 
+    updated. 
+    
+    \noindent Here
+    \begin{align*}
+        \mathbf{x} &= \begin{bmatrix}
+                        c_x \\
+                        c_y \\
+                        s \\
+                        r \\
+                        v_x \\
+                        v_y \\
+                        v_s
+                        \end{bmatrix} \\
+        P_{7 \times 7} &= \begin{cases}
+            \sigma_{ij} & \text{if } i \not= j \\
+            \sigma^2_{ij} & \text{if } i = j
+        \end{cases}
+    \end{align*}
+    
+    \noindent Where, \(c_x\) and \(c_y\) are the abcissa and ordinate of the center point of the object on a cartesian plane, \(s\) is the scale, or specifically 
+    the area, of the bounding box, while \(r\) is the resolution of the bounding box, \(v_x\), \(v_y\) and \(v_s\) tell us how quickly the position of a 
+    bounding box is changing. 
+
+    \noindent For \(P\), \(\sigma_{ij} = \text{Cov}(\mathbf{x}_i, \mathbf{x}_j)\) for cases where \(i \not= j\), while for cases where \(i = j\), 
+    \(\sigma^2_{ii} = \text{Var}(\mathbf{x}_i)\) represents the variation of state \(i\) itself. For the purposes of this model, we will be considering a majority of elements to be equal to 
+    zero, due to the structure of the State Transition Matrix.
+
+    \noindent Along with \(\mathbf{x}\) and \(P\), we also need to define the State Transition Matrix, \(F_{7 \times 7}\), the Process Noise Matrix, \(Q_{7 \times 7}\), 
+    the Measurement Matrix, \(H_{4 \times 7}\), and the Measurement Noise Co-variance Matrix, \(R_{4 \times 4}\). These are used to predict the next state of 
+    \(\mathbf{x}\) and \(P\). Here:- 
+
+    \begin{align*}
+        F_{7\times7} &= \begin{bmatrix}
+            1 & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & 1 & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & 1 & 0 & 0 & 0 & 1 \\
+            0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 & 1 
+        \end{bmatrix} \\
+        Q_{7 \times 7} &= \begin{bmatrix}
+            q_p & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & q_p & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & q_p & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & q_p & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & q_s & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & q_s & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 & q_s
+        \end{bmatrix} \\
+        H_{4 \times 7} &= \begin{bmatrix}
+            1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 1 & 0 & 0 & 0 
+        \end{bmatrix} \\
+        R_{4 \times 4} &= \begin{bmatrix}
+            \sigma^2_{c_x} & 0 & 0 & 0 \\
+            0 & \sigma^2_{c_y} & 0 & 0 \\
+            0 & 0 & \sigma^2_s & 0 \\
+            0 & 0 & 0 & \sigma^2_r
+        \end{bmatrix}
+    \end{align*}
+
+    \noindent Where \(q_p\) and \(q_s\) respectively are the positon and velocity noise variance, and the diagonal entries in \(R\) are the variance, or 
+    uncertainity, of each measurement. Therefore, typically in sort:-
+    \begin{itemize}
+        \item \(F\):- constant velocity model
+        \item \(Q\):- small but non-zero, due to objects not moving perfectly.
+        \item \(H\):- selects [\(c_x, c_y, s, r\)]
+        \item \(R\):- depends on detector quality. Large for blury ones, small for good ones like YOLO
+    \end{itemize}
+
+    \noindent Since, in this implementation, the variables being affected are defined by \(F\) and \(H\) matrix, therefore, our noise variance matrices , i.e., \(Q\) and \(R\) 
+    will be diagonal matrices. The covariance will be included automatically by the Equations defined below. These matrices remain constant.
+
+    \subsection{State Transition Matrix, \(F\)}
+    It describes how the state evolves from one time step to next. Its equation is
+    \begin{equation}
+        \mathbf{x}_{k|k-1} = F\mathbf{x}_{k-1|k-1}
+        \label{Eq:F_Matrix}
+    \end{equation}
+
+    \subsection{Process Noise Covariance Matrix, \(Q\)}
+    It represents uncertainity in system dynamics (model noise), accounting for variables like acceleration or sudden changes in motion. Its used in the equation:-
+    \begin{equation}
+        P_{k|k-1}  = FP_{k-1|k-1}F^T + Q
+        \label{Eq:Q_Matrix}
+    \end{equation}
+
+    \subsection{Measurement Matrix, \(H\)}
+    It maps the state vector to the measurement space. Essentially it converts 
+    \[
+        \begin{bmatrix} c_x & c_y & s & r & v_x & v_y & v_s \end{bmatrix} \rightarrow \begin{bmatrix} c_x & c_y & s & r \end{bmatrix}
+    \]
+
+    So it is used as
+    \begin{equation}
+        \mathbf{z}_k = H\mathbf{x}_k
+        \label{Eq:H_Matrix}
+    \end{equation}
+
+    \subsection{Measurement Noise Covariance Matrix, \(R\)}
+    It represents uncertainity in measurements, i.e., detector noise, thereby, modelling how noisy the detector itself is. Its used in
+    \begin{equation}
+        K = PH^T(HPH^T + R)^{-1}
+        \label{Eq:R_Matrix}
+    \end{equation}
+
+    \section{Mathematical Equations}
+    \subsection{Register Sizing}
+    
+    Typically in when fixing a size for registers in hardware, it is well that we know the maximum value that most of our registers will store. Then it becomes a simple formula 
+    of, 
+    \begin{equation}
+        \text{Bit Size} = \lceil \log_2(\text{Max Size}) \rceil + \text{Guard Bits}
+        \label{Eq:General_Bit_Size}
+    \end{equation}
+
+    \noindent From our assumption that we will only intake image resolution of \(640 \times 640\), and assuming \(2\) guard bits, our minimum number of bits comes out to be.
+    \begin{equation}
+        \text{Bit Size} = \lceil \log_2(640) \rceil + 2 = 10 + 2 = 12 \text{ bits}
+        \label{Eq:Bit_Size}
+    \end{equation}
+    
+    \noindent From \Cref{Eq:Bit_Size}, it is clear that the minimum number of bits we should use per register should be 12.
+
+
+    \subsection{Predictions}
+
+    To calculate the prediction, we will need to perform \Cref{Eq:F_Matrix} and \Cref{Eq:Q_Matrix} in the update block. However, they are matrix multiplication
+    and hence, would be expensive to perform on hardware. However, if we go ahead and try to simplify we get:- 
+    
+    From \Cref{Eq:F_Matrix}
+    \begin{align}
+        \mathbf{x}_{k|k-1} &= F\mathbf{x}_{k-1|k-1} \notag\\
+                           &= \begin{bmatrix}
+                               1 & 0 & 0 & 0 & 1 & 0 & 0 \\
+                               0 & 1 & 0 & 0 & 0 & 1 & 0 \\
+                               0 & 0 & 1 & 0 & 0 & 0 & 1 \\
+                               0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+                               0 & 0 & 0 & 0 & 1 & 0 & 0 \\
+                               0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+                               0 & 0 & 0 & 0 & 0 & 0 & 1 
+                            \end{bmatrix}
+                            \begin{bmatrix}
+                                c_{x_{k-1|k-1}}  \\
+                                c_{y_{k-1|k-1}}  \\
+                                s_{k-1|k-1}  \\
+                                r_{k-1|k-1}  \\
+                                v_{x_{k-1|k-1}} \\
+                                v_{y_{k-1|k-1}} \\
+                                v_{s_{k-1|k-1}}
+                            \end{bmatrix} \notag\\
+        \begin{bmatrix}
+            c_{x_{k|k-1}} \\
+            c_{y_{k|k-1}} \\
+            s_{k|k-1}  \\
+            r_{k|k-1} \\
+            v_{x_{k|k-1}} \\
+            v_{y_{k|k-1}} \\
+            v_{s_{k|k-1}}
+        \end{bmatrix}  &= \begin{bmatrix}
+            c_{x_{k-1|k-1}} + v_{x_{k-1|k-1}} \\
+            c_{y_{k-1|k-1}} + v_{y_{k-1|k-1}} \\
+            s_{k-1|k-1} + v_{s_{k-1|k-1}} \\
+            r_{k-1|k-1} \\
+            v_{x_{k-1|k-1}} \\
+            v_{y_{k-1|k-1}} \\
+            v_{s_{k-1|k-1}}
+        \end{bmatrix}
+        \label{Eq:State_Predict}
+    \end{align}
+
+    \noindent From \Cref{Eq:State_Predict}, it is clear to update the state vector we will need to just employ four adders, instead of a matrix multiplication unit, saving us from 
+    some unnecessary complexity in terms of time and space.
+
+    \noindent Now onto the Prediction of \(P\), from \Cref{Eq:Q_Matrix} we have
+    \begin{align*}
+        P_{k|k-1} &= FP_{k-1|k-1}F^T + Q  \\
+        &=  \begin{bmatrix}
+            1 & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & 1 & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & 1 & 0 & 0 & 0 & 1 \\
+            0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 & 1 
+            \end{bmatrix}
+            \begin{bmatrix}
+                \sigma^2_{cx} & 0 & 0 & 0 & \sigma_{vx} & 0 & 0 \\
+                0 & \sigma^2_{cy} & 0 & 0 & 0 & \sigma_{vy} & 0 \\
+                0 & 0 & \sigma^2_s & 0 & 0 & 0 & \sigma_{vs} \\
+                0 & 0 & 0 & \sigma^2_r & 0 & 0 & 0 \\
+                \sigma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
+                0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
+                0 & 0 & \sigma_{vs} & 0 & 0 & 0 & \sigma^2_{vs}
+            \end{bmatrix}
+            \begin{bmatrix}
+                1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+                0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+                0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+                0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+                1 & 0 & 0 & 0 & 1 & 0 & 0 \\
+                0 & 1 & 0 & 0 & 0 & 1 & 0 \\
+                0 & 0 & 1 & 0 & 0 & 0 & 1 
+            \end{bmatrix} \\
+            &\quad +
+            \begin{bmatrix}
+            q_p & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & q_p & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & q_p & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & q_p & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & q_s & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & q_s & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 & q_s
+            \end{bmatrix}
+    \end{align*}
+
+    \noindent Which gives us
+    
+    \begin{align}
+        P_{k|k-1} &= \begin{bmatrix}
+            \sigma^2_{cx} + 2\sigma_{vx} & 0 & 0 & 0 & \sigma_{vx} + \sigma^2_{vx} & 0 & 0 \\
+            0 & \sigma^2_{cy} + 2\sigma_{vy} & 0 & 0 & 0 & \sigma_{vy} + \sigma^2_{vy} & 0 \\
+            0 & 0 & \sigma^2_{s} + 2\sigma_{vs} & 0 & 0 & 0 & \sigma_{vs} + \sigma^2_{vs} \\
+            0 & 0 & 0 & \sigma^2_{r} & 0 & 0 & 0 \\
+            \sigma_{vx} + \sigma^2_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
+            0 & \sigma_{vy} + \sigma^2_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
+            0 & 0 & \sigma_{vs} + \sigma^2_{vs} & 0 & 0 & 0 & \sigma^2_{vs} 
+        \end{bmatrix} + Q
+        \label{Eq:Cov_Predict_Full}
+    \end{align}
+    
+    \noindent From \Cref{Eq:Cov_Predict_Full}, it is clear that the prediction of state covariance matrix will employ adders, since \(Q\) is assumed to be a diagonal matrix.
+    As for multiplying by two, it can be reduced a simple shifting operation. The structure of both the matrices in the equation means we can get away with a triangular matrix, 
+    without losing any data. Through this, we can see that matrices \(P\) and \(Q\) Themselves can be stored as a vector where \(P\) will be a \(10 \time 1\) matrix (3 more 
+    for \(\sigma\) co-variance), while \(Q\) can be made into a \(7 \time 1\) vector. Therefore:-
+    \begin{equation}
+        P_{k|k-1} = \begin{bmatrix}
+            \sigma^2_{cx} + 2\sigma_{vx} + q_p \\
+            \sigma^2_{cy} + 2\sigma_{vy} + q_p \\
+            \sigma^2_s + 2\sigma_{vs} + q_p \\
+            \sigma^2_r + q_p \\
+            \sigma^2_{vx} + q_v \\
+            \sigma^2_{vy} + q_v \\
+            \sigma^2_{vs} + q_v \\
+            \sigma_{vx} + \sigma^2_{vx} \\
+            \sigma_{vy} + \sigma^2_{vy} \\
+            \sigma_{vs} + \sigma^2_{vs}
+        \end{bmatrix}
+        \label{Eq:Cov_Predict}
+    \end{equation}
+    
+    \subsection{Measurement}
+    
+    The detector sends a measurement vector \(\mathbf{z}_k\) which can be defined as:- 
+    \[
+        \mathbf{z}_k = \begin{bmatrix}x & y & s & r\end{bmatrix}^\text{T}
+    \]
+
+    where:
+    \begin{itemize}
+        \item x, y \(\rightarrow\) centre of bounding box
+        \item s \(\rightarrow\) scale
+        \item r \(\rightarrow\) aspect ratio
+    \end{itemize}
+
+    \subsection{Innovation (Residual)}
+    
+    Here we calculate the difference between the detected and predicted position. Essentially what is calculated is:-
+    \begin{align}
+        \mathbf{y}_k &= \mathbf{z}_k - H\mathbf{x}_{k|k-1} \notag\\
+                    &= \mathbf{z}_k - \begin{bmatrix}
+                        1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+                        0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+                        0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+                        0 & 0 & 0 & 1 & 0 & 0 & 0 
+                    \end{bmatrix}\begin{bmatrix}
+                        c_{x_{k|k-1}} \\
+                        c_{y_{k|k-1}} \\
+                        s_{k|k-1} \\
+                        r_{k|k-1} \\
+                        v_{x_{k|k-1}} \\
+                        v_{y_{k|k-1}} \\
+                        v_{s_{k|k-1}}
+                    \end{bmatrix} \notag\\
+        \mathbf{y}_k &= \begin{bmatrix}
+            x_k - c_{x_{k|k-1}} \\
+            y_k - c_{y_{k|k-1}} \\
+            s_k - s_{k|k-1}  \\
+            r_k - r_{k|k-1} \\
+        \end{bmatrix}
+        \label{Eq:Innovation_yk}
+    \end{align}
+
+    \noindent Similary, for Innovation Co-variance, \(S_k\):-
+    \[
+        S = HP_{k|k-1}H^T + R
+    \]
+
+    \noindent Which can be simplified to 
+    \begin{equation}
+        S_k = \begin{bmatrix}
+            \sigma^2_{px} + \sigma^2_{rx} & 0 & 0 & 0 \\
+            0 & \sigma^2_{py} + \sigma^2_{ry} & 0 & 0 \\
+            0 & 0 & \sigma^2_{ps} + \sigma^2_{rs} & 0 \\
+            0 & 0 & 0 & \sigma^2_{pr} + \sigma^2_{rr}
+        \end{bmatrix}
+        \label{Eq:Innovation_Cov_Actual}
+    \end{equation}
+
+    \noindent From \Cref{Eq:Innovation_Cov_Actual} we can define \(S\) to be 
+
+    \begin{equation}
+        S_k = \begin{bmatrix}
+            \rho_x & 0 & 0 & 0 \\
+            0 & \rho_y & 0 & 0 \\
+            0 & 0 & \rho_s & 0 \\
+            0 & 0 & 0 & \rho_r
+        \end{bmatrix}
+        \rightarrow
+        \begin{bmatrix}
+            \rho_x \\
+            \rho_y \\
+            \rho_s \\
+            \rho_r
+        \end{bmatrix}
+    \end{equation}
+
+    \noindent Where \(\rho_x = \sigma^2_{px} + \sigma^2_{rx}\), \dots, \(\rho_r = \sigma^2_{pr} + \sigma^2_{rr}\)
+
+    \section{K Calculation}
+
+    To calculate \(K\), we first will need to find the inverse of matrix \(S\). Since, for us, \(S\) is a diagonal matrix, the inverse comes out to be the reciprocal of each element in place, i.e.,
+    \[
+        S^{-1}_k = \begin{bmatrix}
+            \frac{1}{\rho_x} & 0 & 0 & 0 \\
+            0 & \frac{1}{\rho_y} & 0 & 0 \\
+            0 & 0 & \frac{1}{\rho_s} & 0 \\
+            0 & 0 & 0 & \frac{1}{\rho_r}
+        \end{bmatrix}
+    \]
+
+    \noindent This leaves us with an important condition, that is, \(S_{ii} \not= 0\), or the inversion will not be defined.
+
+    \noindent Now, since we have an inverted \(S\) matrix, the calculation of matrix \(K\) will come out to be:-
+    \begin{align}
+        K &= P \times H^T \times S^{-1} \notag\\
+          &= \begin{bmatrix}
+              \sigma^2_{cx} & 0 & 0 & 0 & \sigma_{vx} & 0 & 0 \\
+              0 & \sigma^2_{cy} & 0 & 0 & 0 & \sigma_{vy} & 0 \\
+              0 & 0 & \sigma^2_{s} & 0 & 0 & 0 & \sigma_{vs} \\
+              0 & 0 & 0 & \sigma^2_{r} & 0 & 0 & 0 \\
+              \sigma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
+              0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
+              0 & 0 & \sigma_{vs} & 0 & 0 & 0 & \sigma^2_{vs} 
+          \end{bmatrix}
+          \begin{bmatrix}
+              1 & 0 & 0 & 0 \\
+              0 & 1 & 0 & 0 \\
+              0 & 0 & 1 & 0 \\
+              0 & 0 & 0 & 1 \\
+              0 & 0 & 0 & 0 \\
+              0 & 0 & 0 & 0 \\
+              0 & 0 & 0 & 0 
+          \end{bmatrix}
+          \begin{bmatrix}
+              \frac{1}{\rho_x} & 0 & 0 & 0 \\
+              0 & \frac{1}{\rho_y} & 0 & 0 \\
+              0 & 0 & \frac{1}{\rho_s} & 0 \\
+              0 & 0 & 0 & \frac{1}{\rho_r}
+          \end{bmatrix} \notag\\
+        \label{Eq:K_calculation}
+    \end{align}
+
+
+
+
+
+
+\end{document}
