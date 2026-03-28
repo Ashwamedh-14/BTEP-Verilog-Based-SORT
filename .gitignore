@@ -1,5 +1,6 @@
 # Directories
 sort/
+Figures/
 
 # Files
 proposal/main.*
@@ -9,6 +10,8 @@ proposal/main.*
 *.jpeg
 *.odp
 *.log
+*.svg
+*.png
 
 ## Tex Genrated Files
 *.aux

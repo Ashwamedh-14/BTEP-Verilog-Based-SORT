@@ -1,11 +1,13 @@
 \documentclass[10pt]{article}
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath, amssymb, amsthm, graphicx, geometry}
+\usepackage{amsmath, amssymb, amsthm, newtxtext, newtxmath, graphicx, geometry}
 \usepackage[hidelinks]{hyperref}
 \usepackage{cleveref}
+\usepackage{import}
 \geometry{
     margin = 1in
 }
+\graphicspath{"./Figures"}
 
 \setlength{\parskip}{1em}
 
@@ -39,11 +41,11 @@
         \mathbf{x} &= \begin{bmatrix}
                         c_x \\
                         c_y \\
-                        s \\
+                        h \\
                         r \\
                         v_x \\
                         v_y \\
-                        v_s
+                        v_h
                         \end{bmatrix} \\
         P_{7 \times 7} &= \begin{cases}
             \sigma_{ij} & \text{if } i \not= j \\
@@ -51,8 +53,8 @@
         \end{cases}
     \end{align*}
     
-    \noindent Where, \(c_x\) and \(c_y\) are the abcissa and ordinate of the center point of the object on a cartesian plane, \(s\) is the scale, or specifically 
-    the area, of the bounding box, while \(r\) is the resolution of the bounding box, \(v_x\), \(v_y\) and \(v_s\) tell us how quickly the position of a 
+    \noindent Where, \(c_x\) and \(c_y\) are the center point of the bounding box on a cartesian plane, \(h\) is the height of the 
+    bounding box, while \(r\) is the aspect ratio of the bounding box, \(v_x\), \(v_y\) and \(v_s\) tell us how quickly the position of a 
     bounding box is changing. 
 
     \noindent For \(P\), \(\sigma_{ij} = \text{Cov}(\mathbf{x}_i, \mathbf{x}_j)\) for cases where \(i \not= j\), while for cases where \(i = j\), 
@@ -91,7 +93,7 @@
         R_{4 \times 4} &= \begin{bmatrix}
             \sigma^2_{c_x} & 0 & 0 & 0 \\
             0 & \sigma^2_{c_y} & 0 & 0 \\
-            0 & 0 & \sigma^2_s & 0 \\
+            0 & 0 & \sigma^2_h & 0 \\
             0 & 0 & 0 & \sigma^2_r
         \end{bmatrix}
     \end{align*}
@@ -101,7 +103,7 @@
     \begin{itemize}
         \item \(F\):- constant velocity model
         \item \(Q\):- small but non-zero, due to objects not moving perfectly.
-        \item \(H\):- selects [\(c_x, c_y, s, r\)]
+        \item \(H\):- selects [\(c_x, c_y, h, r\)]
         \item \(R\):- depends on detector quality. Large for blury ones, small for good ones like YOLO
     \end{itemize}
 
@@ -125,7 +127,7 @@
     \subsection{Measurement Matrix, \(H\)}
     It maps the state vector to the measurement space. Essentially it converts 
     \[
-        \begin{bmatrix} c_x & c_y & s & r & v_x & v_y & v_s \end{bmatrix} \rightarrow \begin{bmatrix} c_x & c_y & s & r \end{bmatrix}
+        \begin{bmatrix} c_x & c_y & h & r & v_x & v_y & v_h \end{bmatrix} \rightarrow \begin{bmatrix} c_x & c_y & h & r \end{bmatrix}
     \]
 
     So it is used as
@@ -140,10 +142,26 @@
         K = PH^T(HPH^T + R)^{-1}
         \label{Eq:R_Matrix}
     \end{equation}
+    
+    \newpage
+    \section{Model}
+
+    \Cref{fig:Overall_Model} shows the overall model of the SORT tracker that will be implemented in the hardware. This model represents a unit capable of keeping 
+    track of single object. The control unit is not attached yet.
+
+    \begin{figure}[h]
+        \centering
+        \def\svgwidth{\linewidth}
+        \import{./Figures}{FlowChart.pdf_tex}
+        \caption{The Overall Model of the Tracker}
+        \label{fig:Overall_Model}
+    \end{figure}
+    
+    \noindent The vertical rectangle seperating different regions in \Cref{fig:Overall_Model} are clock boundaries.
 
     \section{Mathematical Equations}
     \subsection{Register Sizing}
-    
+
     Typically in when fixing a size for registers in hardware, it is well that we know the maximum value that most of our registers will store. Then it becomes a simple formula 
     of, 
     \begin{equation}
@@ -157,7 +175,8 @@
         \label{Eq:Bit_Size}
     \end{equation}
     
-    \noindent From \Cref{Eq:Bit_Size}, it is clear that the minimum number of bits we should use per register should be 12.
+    \noindent From \Cref{Eq:Bit_Size}, it is clear that the minimum number of bits we should use per register should be 12. Just to be extra safe, I am going to 
+    keep the register size of 16.
 
 
     \subsection{Predictions}
@@ -180,34 +199,34 @@
                             \begin{bmatrix}
                                 c_{x_{k-1|k-1}}  \\
                                 c_{y_{k-1|k-1}}  \\
-                                s_{k-1|k-1}  \\
+                                h_{k-1|k-1}  \\
                                 r_{k-1|k-1}  \\
                                 v_{x_{k-1|k-1}} \\
                                 v_{y_{k-1|k-1}} \\
-                                v_{s_{k-1|k-1}}
+                                v_{h_{k-1|k-1}}
                             \end{bmatrix} \notag\\
         \begin{bmatrix}
             c_{x_{k|k-1}} \\
             c_{y_{k|k-1}} \\
-            s_{k|k-1}  \\
+            h_{k|k-1}  \\
             r_{k|k-1} \\
             v_{x_{k|k-1}} \\
             v_{y_{k|k-1}} \\
-            v_{s_{k|k-1}}
+            v_{h_{k|k-1}}
         \end{bmatrix}  &= \begin{bmatrix}
             c_{x_{k-1|k-1}} + v_{x_{k-1|k-1}} \\
             c_{y_{k-1|k-1}} + v_{y_{k-1|k-1}} \\
-            s_{k-1|k-1} + v_{s_{k-1|k-1}} \\
+            h_{k-1|k-1} + v_{h_{k-1|k-1}} \\
             r_{k-1|k-1} \\
             v_{x_{k-1|k-1}} \\
             v_{y_{k-1|k-1}} \\
-            v_{s_{k-1|k-1}}
+            v_{h_{k-1|k-1}}
         \end{bmatrix}
         \label{Eq:State_Predict}
     \end{align}
 
-    \noindent From \Cref{Eq:State_Predict}, it is clear to update the state vector we will need to just employ four adders, instead of a matrix multiplication unit, saving us from 
-    some unnecessary complexity in terms of time and space.
+    \noindent From \Cref{Eq:State_Predict}, it is clear to update the state vector we will need to just employ three adders, instead of 
+    a matrix multiplication unit, saving us from some unnecessary complexity in terms of time and space.
 
     \noindent Now onto the Prediction of \(P\), from \Cref{Eq:Q_Matrix} we have
     \begin{align*}
@@ -224,11 +243,11 @@
             \begin{bmatrix}
                 \sigma^2_{cx} & 0 & 0 & 0 & \sigma_{vx} & 0 & 0 \\
                 0 & \sigma^2_{cy} & 0 & 0 & 0 & \sigma_{vy} & 0 \\
-                0 & 0 & \sigma^2_s & 0 & 0 & 0 & \sigma_{vs} \\
+                0 & 0 & \sigma^2_h & 0 & 0 & 0 & \sigma_{vh} \\
                 0 & 0 & 0 & \sigma^2_r & 0 & 0 & 0 \\
                 \sigma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
                 0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
-                0 & 0 & \sigma_{vs} & 0 & 0 & 0 & \sigma^2_{vs}
+                0 & 0 & \sigma_{vh} & 0 & 0 & 0 & \sigma^2_{vh}
             \end{bmatrix}
             \begin{bmatrix}
                 1 & 0 & 0 & 0 & 0 & 0 & 0 \\
@@ -257,11 +276,11 @@
         P_{k|k-1} &= \begin{bmatrix}
             \sigma^2_{cx} + 2\sigma_{vx} & 0 & 0 & 0 & \sigma_{vx} + \sigma^2_{vx} & 0 & 0 \\
             0 & \sigma^2_{cy} + 2\sigma_{vy} & 0 & 0 & 0 & \sigma_{vy} + \sigma^2_{vy} & 0 \\
-            0 & 0 & \sigma^2_{s} + 2\sigma_{vs} & 0 & 0 & 0 & \sigma_{vs} + \sigma^2_{vs} \\
+            0 & 0 & \sigma^2_{h} + 2\sigma_{vh} & 0 & 0 & 0 & \sigma_{vh} + \sigma^2_{vh} \\
             0 & 0 & 0 & \sigma^2_{r} & 0 & 0 & 0 \\
             \sigma_{vx} + \sigma^2_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
             0 & \sigma_{vy} + \sigma^2_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
-            0 & 0 & \sigma_{vs} + \sigma^2_{vs} & 0 & 0 & 0 & \sigma^2_{vs} 
+            0 & 0 & \sigma_{vh} + \sigma^2_{vh} & 0 & 0 & 0 & \sigma^2_{vh} 
         \end{bmatrix} + Q
         \label{Eq:Cov_Predict_Full}
     \end{align}
@@ -274,14 +293,14 @@
         P_{k|k-1} = \begin{bmatrix}
             \sigma^2_{cx} + 2\sigma_{vx} + q_p \\
             \sigma^2_{cy} + 2\sigma_{vy} + q_p \\
-            \sigma^2_s + 2\sigma_{vs} + q_p \\
+            \sigma^2_h + 2\sigma_{vh} + q_p \\
             \sigma^2_r + q_p \\
             \sigma^2_{vx} + q_v \\
             \sigma^2_{vy} + q_v \\
-            \sigma^2_{vs} + q_v \\
+            \sigma^2_{vh} + q_v \\
             \sigma_{vx} + \sigma^2_{vx} \\
             \sigma_{vy} + \sigma^2_{vy} \\
-            \sigma_{vs} + \sigma^2_{vs}
+            \sigma_{vh} + \sigma^2_{vh}
         \end{bmatrix}
         \label{Eq:Cov_Predict}
     \end{equation}
@@ -290,14 +309,14 @@
     
     The detector sends a measurement vector \(\mathbf{z}_k\) which can be defined as:- 
     \[
-        \mathbf{z}_k = \begin{bmatrix}x & y & s & r\end{bmatrix}^\text{T}
+        \mathbf{z}_k = \begin{bmatrix}x & y & h & r\end{bmatrix}^\text{T}
     \]
 
     where:
     \begin{itemize}
         \item x, y \(\rightarrow\) centre of bounding box
-        \item s \(\rightarrow\) scale
-        \item r \(\rightarrow\) aspect ratio
+        \item h \(\rightarrow\) height of the bounding box
+        \item r \(\rightarrow\) aspect ratio of the bounding box (constant)
     \end{itemize}
 
     \subsection{Innovation (Residual)}
@@ -313,16 +332,16 @@
                     \end{bmatrix}\begin{bmatrix}
                         c_{x_{k|k-1}} \\
                         c_{y_{k|k-1}} \\
-                        s_{k|k-1} \\
+                        h_{k|k-1} \\
                         r_{k|k-1} \\
                         v_{x_{k|k-1}} \\
                         v_{y_{k|k-1}} \\
-                        v_{s_{k|k-1}}
+                        v_{h_{k|k-1}}
                     \end{bmatrix} \notag\\
         \mathbf{y}_k &= \begin{bmatrix}
             x_k - c_{x_{k|k-1}} \\
             y_k - c_{y_{k|k-1}} \\
-            s_k - s_{k|k-1}  \\
+            h_k - h_{k|k-1}  \\
             r_k - r_{k|k-1} \\
         \end{bmatrix}
         \label{Eq:Innovation_yk}
@@ -338,7 +357,7 @@
         S_k = \begin{bmatrix}
             \sigma^2_{px} + \sigma^2_{rx} & 0 & 0 & 0 \\
             0 & \sigma^2_{py} + \sigma^2_{ry} & 0 & 0 \\
-            0 & 0 & \sigma^2_{ps} + \sigma^2_{rs} & 0 \\
+            0 & 0 & \sigma^2_{ph} + \sigma^2_{rh} & 0 \\
             0 & 0 & 0 & \sigma^2_{pr} + \sigma^2_{rr}
         \end{bmatrix}
         \label{Eq:Innovation_Cov_Actual}
@@ -350,7 +369,7 @@
         S_k = \begin{bmatrix}
             \rho_x & 0 & 0 & 0 \\
             0 & \rho_y & 0 & 0 \\
-            0 & 0 & \rho_s & 0 \\
+            0 & 0 & \rho_h & 0 \\
             0 & 0 & 0 & \rho_r
         \end{bmatrix}
         \rightarrow
@@ -364,14 +383,14 @@
 
     \noindent Where \(\rho_x = \sigma^2_{px} + \sigma^2_{rx}\), \dots, \(\rho_r = \sigma^2_{pr} + \sigma^2_{rr}\)
 
-    \section{K Calculation}
+    \subsection{K Calculation}
 
     To calculate \(K\), we first will need to find the inverse of matrix \(S\). Since, for us, \(S\) is a diagonal matrix, the inverse comes out to be the reciprocal of each element in place, i.e.,
     \[
         S^{-1}_k = \begin{bmatrix}
             \frac{1}{\rho_x} & 0 & 0 & 0 \\
             0 & \frac{1}{\rho_y} & 0 & 0 \\
-            0 & 0 & \frac{1}{\rho_s} & 0 \\
+            0 & 0 & \frac{1}{\rho_h} & 0 \\
             0 & 0 & 0 & \frac{1}{\rho_r}
         \end{bmatrix}
     \]
@@ -384,11 +403,11 @@
           &= \begin{bmatrix}
               \sigma^2_{cx} & 0 & 0 & 0 & \sigma_{vx} & 0 & 0 \\
               0 & \sigma^2_{cy} & 0 & 0 & 0 & \sigma_{vy} & 0 \\
-              0 & 0 & \sigma^2_{s} & 0 & 0 & 0 & \sigma_{vs} \\
+              0 & 0 & \sigma^2_{h} & 0 & 0 & 0 & \sigma_{vh} \\
               0 & 0 & 0 & \sigma^2_{r} & 0 & 0 & 0 \\
               \sigma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
               0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
-              0 & 0 & \sigma_{vs} & 0 & 0 & 0 & \sigma^2_{vs} 
+              0 & 0 & \sigma_{vh} & 0 & 0 & 0 & \sigma^2_{vh} 
           \end{bmatrix}
           \begin{bmatrix}
               1 & 0 & 0 & 0 \\
@@ -402,12 +421,35 @@
           \begin{bmatrix}
               \frac{1}{\rho_x} & 0 & 0 & 0 \\
               0 & \frac{1}{\rho_y} & 0 & 0 \\
-              0 & 0 & \frac{1}{\rho_s} & 0 \\
+              0 & 0 & \frac{1}{\rho_h} & 0 \\
               0 & 0 & 0 & \frac{1}{\rho_r}
           \end{bmatrix} \notag\\
+        K &= \begin{bmatrix}
+            \frac{\sigma^2_{cx}}{\rho_x} & 0 & 0 & 0 \\
+            0 & \frac{\sigma^2_{cy}}{\rho_y} & 0 & 0 \\
+            0 & 0 & \frac{\sigma^2_h}{\rho_h} & 0 \\
+            0 & 0 & 0 & \frac{\sigma^2_r}{\rho_r} \\
+            \frac{\sigma_{vx}}{\rho_x} & 0 & 0 & 0 \\
+            0 & \frac{\sigma_{vy}}{\rho_y} & 0 & 0 \\
+            0 & 0 & \frac{\sigma_{vh}}{\rho_h} & 0
+            \end{bmatrix}
         \label{Eq:K_calculation}
     \end{align}
+    
+    \noindent From \Cref{Eq:K_calculation}, can think of K as a \(7 \times 1\) vector, i.e., 
 
+    \begin{equation}
+        K = \begin{bmatrix}
+            \frac{\sigma^2_{cx}}{\rho_x} \\[5pt]
+            \frac{\sigma^2_{cy}}{\rho_y} \\[5pt]
+            \frac{\sigma^2_s}{\rho_s} \\[5pt]
+            \frac{\sigma^2_r}{\rho_r} \\[5pt]
+            \frac{\sigma_{vx}}{\rho_x} \\[5pt]
+            \frac{\sigma_{vy}}{\rho_y} \\[5pt]
+            \frac{\sigma_{vh}}{\rho_h}
+        \end{bmatrix}
+        \label{Eq:K_definition}
+    \end{equation}
 
 
 

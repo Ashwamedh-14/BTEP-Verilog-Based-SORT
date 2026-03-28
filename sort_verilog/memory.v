@@ -92,71 +92,71 @@ end
 endmodule
 
 module P_block(     // block to hold the covariance matrix
-    clk, rst, en, x, y, s, r, vx, vy, vs, cov_vx, cov_vy, cov_vs,
-    x_out, y_out, s_out, r_out, vx_out, vy_out, vs_out, cov_vx_out, cov_vy_out, cov_vs_out
+    clk, rst, en, x, y, h, r, vx, vy, vh, cov_vx, cov_vy, cov_vh,
+    x_out, y_out, h_out, r_out, vx_out, vy_out, vh_out, cov_vx_out, cov_vy_out, cov_vh_out
 );
 
 input clk, rst, en;
-input [15:0] x, y, s, r, vx, vy, vs, cov_vx, cov_vy, cov_vs;
+input [15:0] x, y, h, r, vx, vy, vh, cov_vx, cov_vy, cov_vh;
 
-output reg [15:0] x_out, y_out, s_out, r_out, vx_out, vy_out, vs_out, cov_vx_out, cov_vy_out, cov_vs_out;
+output reg [15:0] x_out, y_out, h_out, r_out, vx_out, vy_out, vh_out, cov_vx_out, cov_vy_out, cov_vh_out;
 
 always @(posedge clk) begin
     if (rst == 1'b1) begin
         x_out <= 16'b0000_0000_0000_0000;
         y_out <= 16'b0000_0000_0000_0000;
-        s_out <= 16'b0000_0000_0000_0000;
+        h_out <= 16'b0000_0000_0000_0000;
         r_out <= 16'b0000_0000_0000_0000;
         vx_out <= 16'b0000_0000_0000_0000;
         vy_out <= 16'b0000_0000_0000_0000;
-        vs_out <= 16'b0000_0000_0000_0000;
+        vh_out <= 16'b0000_0000_0000_0000;
         cov_vx_out <= 16'b0000_0000_0000_0000;
         cov_vy_out <= 16'b0000_0000_0000_0000;
-        cov_vs_out <= 16'b0000_0000_0000_0000;
+        cov_vh_out <= 16'b0000_0000_0000_0000;
     end
     else if (en == 1'b1) begin
         x_out <= x;
         y_out <= y;
-        s_out <= s;
+        h_out <= h;
         r_out <= r;
         vx_out <= vx;
         vy_out <= vy;
-        vs_out <= vs;
+        vh_out <= vh;
         cov_vx_out <= cov_vx;
         cov_vy_out <= cov_vy;
-        cov_vs_out <= vs_out;
+        cov_vh_out <= vh_out;
     end
     else ;
 end
 endmodule
 
 module Q_block(   // block to hold noise variance 
-    clk, rst, en, x, y, s, r, vx, vy, vs,
-    x_out, y_out, s_out, r_out, vx_out, vy_out, vs_out
+    clk, rst, en, x, y, h, r, vx, vy, vh,
+    x_out, y_out, h_out, r_out, vx_out, vy_out, vh_out
 );
 
 input clk, rst, en;
-input [16:0] x, y, s, r, vx, vy, vs;
-output reg [16:0] x_out, y_out, s_out, r_out, vx_out, vy_out, vs_out;
+input [16:0] x, y, h, r, vx, vy, vh;
+output reg [16:0] x_out, y_out, h_out, r_out, vx_out, vy_out, vh_out;
 
 always @(posedge clk) begin
     if (rst == 1'b1) begin
         x_out <= 16'b0000_0000_0000_0000;
         y_out <= 16'b0000_0000_0000_0000;
-        s_out <= 16'b0000_0000_0000_0000;
+        h_out <= 16'b0000_0000_0000_0000;
         r_out <= 16'b0000_0000_0000_0000;
         vx_out <= 16'b0000_0000_0000_0000;
         vy_out <= 16'b0000_0000_0000_0000;
-        vs_out <= 16'b0000_0000_0000_0000;
+        vh_out <= 16'b0000_0000_0000_0000;
     end
     else if (en == 1'b1) begin
         x_out <= x;
         y_out <= y;
-        s_out <= s;
+        h_out <= h;
         r_out <= r;
         vx_out <= vx;
         vy_out <= vy;
-        vs_out <= vs;
+        vh_out <= vh;
     end
     else ;
 end
