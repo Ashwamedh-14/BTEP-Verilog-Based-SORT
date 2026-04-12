@@ -1,6 +1,7 @@
 # Directories
 sort/
 Figures/
+.venv
 
 # Files
 proposal/main.*
@@ -12,6 +13,10 @@ proposal/main.*
 *.log
 *.svg
 *.png
+*.MP4
+*.SRT
+*.python-version
+*.pt
 
 ## Tex Genrated Files
 *.aux

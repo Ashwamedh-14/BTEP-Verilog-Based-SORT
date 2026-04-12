@@ -24,7 +24,7 @@
     \section{Assumptions}
     The following are the assumptions made
     \begin{itemize}
-        \item Input Image Size:- \( 640 \times 640\)
+        \item Input Image Size:- \( 640 \times 640\) (Most common image size for YOLO v8)
         \item The image's cartesian plane will have its origin at the lower left corner. This ensures the whole image has positive co-ordinates at all times.
         \item No cross correlation with X and Y coordinates.
         \item The time step is taken to be equal to one frame interval.
@@ -177,6 +177,8 @@
     
     \noindent From \Cref{Eq:Bit_Size}, it is clear that the minimum number of bits we should use per register should be 12. Just to be extra safe, I am going to 
     keep the register size of 16.
+
+    \noindent For fractional Fixed Point Notation, I think I will go with the FXP(8, 8).
 
 
     \subsection{Predictions}
@@ -442,17 +444,173 @@
         K = \begin{bmatrix}
             \frac{\sigma^2_{cx}}{\rho_x} \\[5pt]
             \frac{\sigma^2_{cy}}{\rho_y} \\[5pt]
-            \frac{\sigma^2_s}{\rho_s} \\[5pt]
+            \frac{\sigma^2_h}{\rho_h} \\[5pt]
             \frac{\sigma^2_r}{\rho_r} \\[5pt]
             \frac{\sigma_{vx}}{\rho_x} \\[5pt]
             \frac{\sigma_{vy}}{\rho_y} \\[5pt]
             \frac{\sigma_{vh}}{\rho_h}
         \end{bmatrix}
+        = \begin{bmatrix}
+            \gamma_{cx} \\
+            \gamma_{cy} \\
+            \gamma_h \\
+            \gamma_r \\
+            \gamma_{vx} \\
+            \gamma_{vy} \\
+            \gamma_{vh}
+        \end{bmatrix}
         \label{Eq:K_definition}
     \end{equation}
 
+    \subsection{Update Phase}
 
+    In this phase, we update the predicted bounding box with the measured bounding box, i.e., correcting the predicted box. The two primary equations in this phase are:
+    
+    \begin{align}
+        \mathbf{x}_k &= \mathbf{x}_{k|k-1} + K\mathbf{y} \label{Eq:Update-Eq-1} \\
+        P_k &= (I - KH)P_{k|k-1} \label{Eq:Update-Eq-2}
+    \end{align}
 
+    \noindent In \Cref{Eq:Update-Eq-1}, we get the corrected state of \(\mathbf{x}_k\) using the predicted state, \(\mathbf{x}_{k|k-1}\), \(K\) calculated in 
+    \Cref{Eq:K_calculation}, and the residual, i.e., \(\mathbf{y}\) calculated in \Cref{Eq:Innovation_yk}. Similarly for the case of \(P_k\). 
 
+    \noindent Getting to calculations, for \(\mathbf{x}_k\), from \Cref{Eq:Update-Eq-1}, we have
+
+    \begin{align}
+        \mathbf{x}_k &= \begin{bmatrix}
+            cx_{k|k-1} \\
+            cy_{k|k-1} \\
+            h_{k|k-1} \\
+            r_{k|k-1} \\
+            vx_{k|k-1} \\
+            vy_{k|k-1} \\
+            vh_{k|k-1}
+        \end{bmatrix} +
+        \begin{bmatrix}
+            \frac{\sigma^2_{cx}}{\rho_x} & 0 & 0 & 0 \\
+            0 & \frac{\sigma^2_{cy}}{\rho_y} & 0 & 0 \\
+            0 & 0 & \frac{\sigma^2_h}{\rho_h} & 0 \\
+            0 & 0 & 0 & \frac{\sigma^2_r}{\rho_r} \\
+            \frac{\sigma_{vx}}{\rho_x} & 0 & 0 & 0 \\
+            0 & \frac{\sigma_{vy}}{\rho_y} & 0 & 0 \\
+            0 & 0 & \frac{\sigma_{vh}}{\rho_h} & 0
+        \end{bmatrix}
+        \begin{bmatrix}
+            x_k - cx_{k|k-1} \\
+            y_k - cy_{k|k-1} \\
+            h_k - h_{k|k-1} \\
+            r_k - r_{k|k-1}
+        \end{bmatrix} \notag \\
+        \mathbf{x}_k &= \begin{bmatrix}
+            cx_{k|k-1} + \frac{\sigma^2_{cx}(x_k - cx_{k|k-1})}{\rho_x} \\[5pt]
+            cy_{k|k-1} + \frac{\sigma^2_{cy}(y_k - cy_{k|k-1})}{\rho_y} \\[5pt]
+            h_{k|k-1} + \frac{\sigma^2_h(h_k - h_{k|k-1})}{\rho_h} \\[5pt]
+            r_{k|k-1} + \frac{\sigma^2_r(r_k - r_{k|k-1})}{\rho_r} \\[5pt]
+            vx_{k|k-1} + \frac{\sigma_{vx}(x_k - cx_{k|k-1})}{\rho_x} \\[5pt]
+            vy_{k|k-1} + \frac{\sigma_{vy}(y_k - cy_{k|k-1})}{\rho_y} \\[5pt]
+            vh_{k|k-1} + \frac{\sigma_{vh}(h_k - cy_{k|k-1})}{\rho_h}
+        \end{bmatrix}
+        \label{Eq:X_update}
+    \end{align}
+    
+    \noindent And to calculate \(P_k\), we first need to calculate \(I - KH\), which from \Cref{Eq:K_calculation} comes out to be:
+    \begin{equation} \hspace{-0.5cm}
+        I - KH = \begin{bmatrix}
+            1 - \frac{\sigma^2_{cx}}{\rho_x} & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 1 - \frac{\sigma^2_{cy}}{\rho_y} & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 1 - \frac{\sigma^2_h}{\rho_h} & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 1 - \frac{\sigma^2_r}{\rho_r} & 0 & 0 & 0 \\
+            -\frac{\sigma_{vx}}{\rho_x} & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & -\frac{\sigma_{vy}}{\rho_x} & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & -\frac{\sigma_{vh}}{\rho_h} & 0 & 0 & 0 & 1 
+        \end{bmatrix} = \begin{bmatrix}
+            1 - \gamma_{cx} & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 1 - \gamma_{cy} & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 1 - \gamma_h & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 1 - \gamma_r & 0 & 0 & 0 \\
+            -\gamma_{vx} & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & -\gamma_{vy} & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & -\gamma_{vh} & 0 & 0 & 0 & 1
+        \end{bmatrix}
+        \label{Eq:I-KH}
+    \end{equation}
+
+    \noindent From \Cref{Eq:I-KH} and \Cref{Eq:Update-Eq-2}, 
+    
+    \begin{equation*}
+        P_k = \begin{bmatrix}
+            1 - \gamma_{cx} & 0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 1 - \gamma_{cy} & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 1 - \gamma_h & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 1 - \gamma_r & 0 & 0 & 0 \\
+            -\gamma_{vx} & 0 & 0 & 0 & 1 & 0 & 0 \\
+            0 & -\gamma_{vy} & 0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & -\gamma_{vh} & 0 & 0 & 0 & 1
+        \end{bmatrix}
+        \begin{bmatrix}
+            \sigma^2_{cx} & 0 & 0 & 0 & \sigma_{vx} & 0 & 0 \\
+            0 & \sigma^2_{cy} & 0 & 0 & 0 & \sigma_{vy} & 0 \\
+            0 & 0 & \sigma^2_h & 0 & 0 & 0 & \sigma_{vh} \\
+            0 & 0 & 0 & \sigma^2_r & 0 & 0 & 0 \\
+            \sigma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} & 0 & 0 \\
+            0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} & 0 \\
+            0 & 0 & \sigma_{vy} & 0 & 0 & 0 & \sigma^2_{vh} 
+        \end{bmatrix}
+    \end{equation*}
+    
+    \noindent From which we get the terrifying matrix of
+
+    \[
+        P_k = \begin{bmatrix}
+            (1 - \gamma_{cx})\sigma^2_{cx} & 0 & 0 & 0 & (1 - \gamma_{cx})\sigma_{vx} & 0 & 0 \\
+            0 & (1 - \gamma_{cy})\sigma^2_{cy} & 0 & 0 & 0 & (1 - \gamma_{cy})\sigma_{vy} & 0 \\
+            0 & 0 & (1 - \gamma_h)\sigma^2_h & 0 & 0 & 0 & (1 - \gamma_h)\sigma_{vh} \\
+            0 & 0 & 0 & (1 - \gamma_r)\sigma^2_r & 0 & 0 & 0 \\
+            \sigma_{vx} - \sigma^2_{cx}\gamma_{vx} & 0 & 0 & 0 & \sigma^2_{vx} - \sigma_{vx}\gamma_{vx} & 0 & 0 \\
+            0 & \sigma_{vy} - \sigma^2_{cy}\gamma_{vy} & 0 & 0 & 0 & \sigma^2_{vy} - \sigma_{vy}\gamma_{vy} & 0 \\
+            0 & 0 & \sigma_{vh} - \sigma^2_h\gamma_{vh} & 0 & 0 & 0 & \sigma^2_{vh} - \sigma_{vh}\gamma_{vh}
+        \end{bmatrix}
+    \]
+
+    \noindent Now lets try to convert these crazy equations into something more digestible. Refering to \Cref{Eq:K_definition} for values of \(\gamma_{ij}\), we have
+
+    \begin{align*}
+        P_{cx}(k) &= (1 - \gamma_{cx})\sigma^2_{cx} = \sigma^2_{cx} - \frac{(\sigma^2_{cx})^2}{\rho_x} \\
+        P_{cy}(k) &= (1 - \gamma_{cy})\sigma^2_{cy} = \sigma^2_{cy} - \frac{(\sigma^2_{cy})^2}{\rho_y} \\
+        P_h(k) &= (1 - \gamma_h)\sigma^2_h = \sigma^2_h - \frac{(\sigma^2_h)^2}{\rho_h} \\
+        P_r(k) &= (1 - \gamma_r)\sigma^2_r = \sigma^2_r - \frac{(\sigma^2_r)^2}{\rho_r} \\
+        P_{vx}(k) &= \sigma^2_{vx} - \sigma_{vx}\gamma_{vx} = \sigma^2_{vx} - \frac{(\sigma_{vx})^2}{\rho_{vx}} \\
+        P_{vy}(k) &= \sigma^2_{vy} - \sigma_{vy}\gamma_{vy} = \sigma^2_{vy} - \frac{(\sigma_{vy})^2}{\rho_{vy}} \\
+        P_{vh}(k) &= \sigma^2_{vh} - \sigma_{vh}\gamma_{vh} = \sigma^2_{vh} - \frac{(\sigma_{vh})^2}{\rho_{vh}} \\
+        P_{51}(k) &= \sigma_{vx} - \sigma^2_{cx}\gamma_{vx} = \sigma_{vx} - \frac{\sigma^2_{cx}\sigma_{vx}}{\rho_x} \\ 
+                  &= \sigma_{vx} - \sigma_{vx}\gamma_{cx} = (1 - \gamma_{cx})\sigma_{vx} = P_{15}(k) \\
+        P_{62}(k) &= \sigma_{vy} - \sigma^2_{cy}\gamma_{vy} = \sigma_{vy} - \frac{\sigma^2_{cy}\sigma_{vy}}{\rho_y} \\
+                  &= \sigma_{vy} - \sigma_{vy}\gamma_{cy} = (1 - \gamma_{cy})\sigma_{vy} = P_{26}(k) \\
+        P_{73}(k) &= \sigma_{vh} - \sigma^2_h\gamma_{vh} = \sigma_{vh} - \frac{\sigma^2_h\sigma_{vh}}{\rho_h} \\
+                  &= \sigma_{vh} - \sigma_{vh}\gamma_h = (1 - \gamma_h)\sigma_{vh} = P_{37}(k)
+    \end{align*}
+
+    \noindent \textbf{Note:-} Here \((\sigma_{ij})^2 \not= \sigma^2_{ij}\), since \(\sigma_{ij} = \text{Cov}(\mathbf{x}_i, \mathbf{x}_j)\), while \(\sigma^2_{ii} = \text{Var}(\mathbf{x}_i)\) 
+    represents the variation of state \(\mathbf{x}_i\) with itself.
+
+    \noindent From the above equations, it is clear to represent the updated \(P\) matrix, we can use a vector of size \(10\). Hence we can say
+    \begin{equation}
+        P_k = \begin{bmatrix}
+            \sigma^2_{cx} - \frac{(\sigma^2_{cx})^2}{\rho_x} \\[5pt]
+                \sigma^2_{cy} - \frac{(\sigma^2_{cy})^2}{\rho_y} \\[5pt]
+                \sigma^2_h - \frac{(\sigma^2_h)^2}{\rho_h} \\[5pt]
+                \sigma^2_r - \frac{(\sigma^2_r)^2}{\rho_h} \\[5pt]
+                \sigma^2_{vx} - \frac{(\sigma^2_{vx})^2}{\rho_{vx}} \\[5pt]
+                \sigma^2_{vy} - \frac{(\sigma^2_{vy})^2}{\rho_{vy}} \\[5pt]
+                \sigma^2_{vh} - \frac{(\sigma^2_{vh})^2}{\rho_{vh}} \\[5pt]
+                \sigma_{vx} - \frac{\sigma^2_{cx} \times \sigma_{vx}}{\rho_x} \\[5pt]
+                \sigma_{vy} - \frac{\sigma^2_{cy} \times \sigma_{vy}}{\rho_y} \\[5pt]
+                \sigma_{vh} - \frac{\sigma^2_h \times \sigma_{vh}}{\rho_h}
+            \end{bmatrix}
+            \label{Eq:P-update}
+    \end{equation}
+
+    \noindent From \Cref{Eq:X_update} and \Cref{Eq:P-update}, we have the calculations we need to do for this phase. In \eqref{Eq:P-update} particularly, we can see we don't need to go 
+    out of our way to calculate K, and can directly use the \(S\) matrix calculations in this step. Hence, we have our \(\mathbf{x}_k\) and \(P_k\). 
 
 \end{document}
