@@ -1,0 +1,39 @@
+\contentsline {section}{Declaration}{i}{Doc-Start}%
+\contentsline {section}{Certificate}{ii}{Doc-Start}%
+\contentsline {section}{Certificate}{iii}{Doc-Start}%
+\contentsline {section}{Abstract}{iv}{Doc-Start}%
+\contentsline {section}{Table of Contents}{v}{Doc-Start}%
+\contentsline {chapter}{List of Figures}{vii}{chapter*.2}%
+\contentsline {chapter}{List of Tables}{viii}{chapter*.3}%
+\contentsline {chapter}{Gantt Chart}{ix}{chapter*.3}%
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Project Definition}{2}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Project Objectives}{2}{section.1.2}%
+\contentsline {chapter}{\numberline {2}Literature Survey}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Related Work}{4}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Evolution of Object Detection}{4}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Multi-Object Tracking and Data Association}{4}{subsection.2.1.2}%
+\contentsline {subsection}{\numberline {2.1.3}SORT and Its Extensions}{5}{subsection.2.1.3}%
+\contentsline {subsection}{\numberline {2.1.4}Hardware and Real-Time Implementation Considerations}{5}{subsection.2.1.4}%
+\contentsline {subsection}{\numberline {2.1.5}Research Gap and Project Positioning}{5}{subsection.2.1.5}%
+\contentsline {section}{\numberline {2.2}Tools and Technologies}{6}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Detection Backbone}{6}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}Tracking Core}{6}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Software Prototyping Stack}{6}{subsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.2.4}Hardware Mapping Perspective}{6}{subsection.2.2.4}%
+\contentsline {subsection}{\numberline {2.2.5}Summary of Survey}{6}{subsection.2.2.5}%
+\contentsline {chapter}{\numberline {3}Methodology}{7}{chapter.3}%
+\contentsline {chapter}{\numberline {4}Results}{9}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Project Outcomes}{9}{section.4.1}%
+\contentsline {section}{\numberline {4.2}My Contributions to the Project}{10}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Learning Outcomes}{10}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Real World Applications}{11}{section.4.4}%
+\contentsline {chapter}{\numberline {5}Conclusion}{12}{chapter.5}%
+\contentsline {chapter}{\numberline {6}Example Chapter}{13}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Only for inspiration}{13}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}This is a subsection}{13}{subsection.6.1.1}%
+\contentsline {section}{\numberline {6.2}General formatting}{13}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Tables and figures}{14}{section.6.3}%
+\contentsline {chapter}{Bibliography}{15}{figure.caption.8}%
+\contentsline {chapter}{Appendices}{18}{chapter*.9}%
+\contentsfinish 

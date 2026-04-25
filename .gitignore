@@ -17,6 +17,9 @@ proposal/main.*
 *.SRT
 *.python-version
 *.pt
+*.csv
+*.mp4
+*.avi
 
 ## Tex Genrated Files
 *.aux
@@ -24,4 +27,8 @@ proposal/main.*
 *.blg
 *.fdb_latexmk
 *.fls
+*.lof
+*.lot
 *.out
+*.gz
+

@@ -579,9 +579,9 @@
         P_{cy}(k) &= (1 - \gamma_{cy})\sigma^2_{cy} = \sigma^2_{cy} - \frac{(\sigma^2_{cy})^2}{\rho_y} \\
         P_h(k) &= (1 - \gamma_h)\sigma^2_h = \sigma^2_h - \frac{(\sigma^2_h)^2}{\rho_h} \\
         P_r(k) &= (1 - \gamma_r)\sigma^2_r = \sigma^2_r - \frac{(\sigma^2_r)^2}{\rho_r} \\
-        P_{vx}(k) &= \sigma^2_{vx} - \sigma_{vx}\gamma_{vx} = \sigma^2_{vx} - \frac{(\sigma_{vx})^2}{\rho_{vx}} \\
-        P_{vy}(k) &= \sigma^2_{vy} - \sigma_{vy}\gamma_{vy} = \sigma^2_{vy} - \frac{(\sigma_{vy})^2}{\rho_{vy}} \\
-        P_{vh}(k) &= \sigma^2_{vh} - \sigma_{vh}\gamma_{vh} = \sigma^2_{vh} - \frac{(\sigma_{vh})^2}{\rho_{vh}} \\
+        P_{vx}(k) &= \sigma^2_{vx} - \sigma_{vx}\gamma_{vx} = \sigma^2_{vx} - \frac{(\sigma_{vx})^2}{\rho_{x}} \\
+        P_{vy}(k) &= \sigma^2_{vy} - \sigma_{vy}\gamma_{vy} = \sigma^2_{vy} - \frac{(\sigma_{vy})^2}{\rho_{y}} \\
+        P_{vh}(k) &= \sigma^2_{vh} - \sigma_{vh}\gamma_{vh} = \sigma^2_{vh} - \frac{(\sigma_{vh})^2}{\rho_{h}} \\
         P_{51}(k) &= \sigma_{vx} - \sigma^2_{cx}\gamma_{vx} = \sigma_{vx} - \frac{\sigma^2_{cx}\sigma_{vx}}{\rho_x} \\ 
                   &= \sigma_{vx} - \sigma_{vx}\gamma_{cx} = (1 - \gamma_{cx})\sigma_{vx} = P_{15}(k) \\
         P_{62}(k) &= \sigma_{vy} - \sigma^2_{cy}\gamma_{vy} = \sigma_{vy} - \frac{\sigma^2_{cy}\sigma_{vy}}{\rho_y} \\
@@ -599,10 +599,10 @@
             \sigma^2_{cx} - \frac{(\sigma^2_{cx})^2}{\rho_x} \\[5pt]
                 \sigma^2_{cy} - \frac{(\sigma^2_{cy})^2}{\rho_y} \\[5pt]
                 \sigma^2_h - \frac{(\sigma^2_h)^2}{\rho_h} \\[5pt]
-                \sigma^2_r - \frac{(\sigma^2_r)^2}{\rho_h} \\[5pt]
-                \sigma^2_{vx} - \frac{(\sigma^2_{vx})^2}{\rho_{vx}} \\[5pt]
-                \sigma^2_{vy} - \frac{(\sigma^2_{vy})^2}{\rho_{vy}} \\[5pt]
-                \sigma^2_{vh} - \frac{(\sigma^2_{vh})^2}{\rho_{vh}} \\[5pt]
+                \sigma^2_r - \frac{(\sigma^2_r)^2}{\rho_r} \\[5pt]
+                \sigma^2_{vx} - \frac{(\sigma^2_{vx})^2}{\rho_{x}} \\[5pt]
+                \sigma^2_{vy} - \frac{(\sigma^2_{vy})^2}{\rho_{y}} \\[5pt]
+                \sigma^2_{vh} - \frac{(\sigma^2_{vh})^2}{\rho_{h}} \\[5pt]
                 \sigma_{vx} - \frac{\sigma^2_{cx} \times \sigma_{vx}}{\rho_x} \\[5pt]
                 \sigma_{vy} - \frac{\sigma^2_{cy} \times \sigma_{vy}}{\rho_y} \\[5pt]
                 \sigma_{vh} - \frac{\sigma^2_h \times \sigma_{vh}}{\rho_h}

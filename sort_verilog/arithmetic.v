@@ -15,22 +15,5 @@ assign {Cout, S} = S_temp;
 assign Overflow = (A[15] == B_mask[15]) && (S[15] != A[15]);
 endmodule
 
-module Division_16bit(Y, A, B);
-input [15:0] A, B;
-output reg [15:0] Y;
-
-endmodule
 
 
-module Mult_Div_16bit(Y, A, B, C);
-input [15:0] A, B, C;
-output reg [15:0] Y;
-
-reg [31:0] temp;
-
-always @(*) begin
-    temp = A * B;
-    Y = temp / C;
-end
-
-endmodule
