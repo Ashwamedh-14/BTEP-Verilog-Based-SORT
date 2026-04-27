@@ -1,100 +1,112 @@
 % Names of the subsection reflect the content that is required. More subsections can be added if required
-\chapter{Literature Survey} 
+\chapter{Literature Survey}
 \label{section:lit_survey}
-Object detection and multi-object tracking (MOT) are core components of modern video analytics systems used in surveillance, 
-traffic monitoring, and autonomous perception. In such systems, detection estimates object locations in each frame, while 
-tracking enforces temporal consistency and identity assignment across frames. The quality of an MOT pipeline is therefore 
-jointly determined by detector robustness, data association strategy, and computational efficiency 
-\cite{Milan2016MOT16, Bewley2016_sort}. This chapter reviews relevant literature with emphasis on methods that are compatible 
-with real-time and hardware-oriented deployment.
+
+Object tracking in video is commonly formulated as a detection-and-association pipeline. Detection 
+localizes objects in each frame, while tracking predicts motion and preserves temporal consistency. 
+The overall quality depends on both stages and on implementation efficiency, especially for real-time 
+or hardware-constrained deployments \cite{Milan2016MOT16, Bewley2016_sort}. This chapter reviews prior 
+work that is most relevant to the present pipeline, where foreground segmentation is used for detection 
+and a SORT-style tracker is used for online state estimation.
 
 \section{Related Work}
 \label{section:related_work}
 
-\subsection{Evolution of Object Detection}
-Early object detection methods used hand-crafted features and classical machine learning. Viola and Jones proposed a 
-cascade framework using Haar-like features for rapid face detection \cite{ViolaJones2001}. Dalal and Triggs later demonstrated 
-the effectiveness of Histogram of Oriented Gradients (HOG) for pedestrian detection \cite{DalalTriggs2005}. While these 
-methods were computationally efficient for their time, they were limited in generalization across object categories and 
-complex scenes.
+\subsection{Detection Methods for Video Tracking}
+Early detection approaches relied on handcrafted features and classical classifiers. Viola--Jones used 
+Haar-like features with cascade classification for fast detection \cite{ViolaJones2001}, and Dalal--Triggs 
+showed robust pedestrian detection using HOG descriptors \cite{DalalTriggs2005}. Deep learning methods 
+later improved accuracy, including Faster R-CNN \cite{Ren2015FasterRCNN} and one-stage detectors such as 
+YOLO \cite{Redmon2016YOLO}. While these methods are highly effective, they often require higher compute 
+and memory budgets than lightweight motion-based pipelines.
 
-The introduction of deep convolutional neural networks significantly improved detection accuracy. Region-based approaches such as 
-Faster R-CNN \cite{Ren2015FasterRCNN} offered strong accuracy by combining region proposal mechanisms with deep feature extraction, 
-but incurred relatively high inference latency. In contrast, one-stage detectors such as YOLO reframed detection as a 
-single regression problem, enabling real-time throughput \cite{Redmon2016YOLO}. Successive variants 
-(for example, YOLOv3 and YOLOv4) improved multi-scale feature representation and training strategies, improving the 
-speed-accuracy trade-off \cite{RedmonFarhadi2018YOLOv3, Bochkovskiy2020YOLOv4}. Recent practical implementations 
-such as Ultralytics YOLOv8 continue this trend by providing efficient inference and deployment-friendly tooling 
-\cite{Jocher2023Ultralytics}.
+For tracking tasks where the foreground object is visually prominent and scene dynamics are manageable, 
+background subtraction remains an efficient alternative to heavy per-frame object detectors. This motivates 
+a foreground-driven detection stage for the current project.
 
-\subsection{Multi-Object Tracking and Data Association}
-MOT aims to maintain consistent trajectories and identities over time despite missed detections, clutter, and occlusion. 
-A common tracking-by-detection formulation separates the problem into three stages: state prediction, association, and update. 
-The Kalman filter \cite{Kalman1960} remains a standard estimator for linear motion models due to its low complexity and recursive design. 
-For assignment, the Hungarian algorithm provides an optimal bipartite matching solution in polynomial 
-time \cite{Kuhn1955Hungarian}.
+\subsection{Background Subtraction and Adaptive Gaussian Models}
+Background subtraction is a widely used strategy for extracting moving objects in surveillance and 
+scene monitoring. Stauffer and Grimson introduced adaptive Gaussian mixture modeling for per-pixel 
+background representation under dynamic scene conditions \cite{StaufferGrimson1999}. Zivkovic proposed 
+adaptive updates that improve model efficiency and robustness in practical 
+settings \cite{Zivkovic2004, ZivkovicHeijden2006}. These foundations are reflected in common computer 
+vision toolkits such as OpenCV, where MOG2 is used for real-time foreground mask 
+estimation \cite{Bradski2000OpenCV}.
 
-Benchmarking efforts such as MOTChallenge have standardized metrics and datasets for comparing trackers \cite{Milan2016MOT16}. 
-These benchmarks also highlight that tracking accuracy is highly dependent on detector quality and association robustness, 
-particularly under dense scenes and partial occlusions.
+In practice, background subtraction is typically followed by denoising and connected component 
+or contour analysis to convert binary masks into bounding boxes. This combination offers low latency 
+and deterministic behavior, which are useful when interfacing with hardware-friendly tracking stages.
 
-\subsection{SORT and Its Extensions}
-Simple Online and Realtime Tracking (SORT) is a lightweight baseline that combines Kalman filtering with IoU-based association 
-and Hungarian matching \cite{Bewley2016_sort}. SORT is attractive for embedded and real-time systems 
-because it uses minimal appearance modeling and low computational overhead. However, its reliance on geometric 
-overlap and short-term motion assumptions makes it sensitive to long occlusions and abrupt motion.
+\subsection{Tracking-by-Detection and Data Association}
+Tracking-by-detection decomposes MOT into prediction, association, and correction. The Kalman 
+filter remains a standard choice for linear state estimation due to recursive updates and low computational 
+cost \cite{Kalman1960}. In general MOT settings, the Hungarian algorithm is commonly used for optimal 
+bipartite assignment between predicted tracks and current detections \cite{Kuhn1955Hungarian}.
 
-To address identity switches in crowded scenes, DeepSORT adds appearance descriptors to the association stage, 
-improving re-identification performance \cite{Wojke2017DeepSORT}. More recent trackers such as ByteTrack revisit association 
-heuristics by including low-confidence detections to recover difficult trajectories \cite{Zhang2022ByteTrack}. 
-These approaches improve robustness but typically increase computational and implementation complexity compared to 
-baseline SORT.
+Community benchmarks such as MOTChallenge have standardized tracker evaluation and shown that detector 
+quality and association strategy strongly influence final tracking metrics \cite{Milan2016MOT16}. These 
+findings justify evaluating both geometric overlap and temporal consistency when comparing tracker variants.
 
-\subsection{Hardware and Real-Time Implementation Considerations}
-For practical deployments, latency, memory bandwidth, and power constraints are often as important as benchmark accuracy. 
-Surveys on efficient deep learning indicate that algorithm-hardware co-design is essential for edge systems, 
-especially when combining neural inference with tracking logic \cite{Sze2017EfficientDNN}. In this context, SORT-style 
-pipelines are advantageous because major operations (state prediction, covariance update, and gating) are structured and 
-arithmetic-heavy, making them suitable for fixed-point and hardware implementations.
+\subsection{SORT and Successor Approaches}
+SORT (Simple Online and Realtime Tracking) combines Kalman prediction with IoU-based association and 
+Hungarian matching \cite{Bewley2016_sort}. Its main advantage is a strong speed-accuracy balance for 
+online use, with minimal appearance modeling overhead. DeepSORT extends SORT by adding appearance embeddings 
+to reduce identity switches \cite{Wojke2017DeepSORT}, and ByteTrack improves association robustness by using 
+low-confidence detections in a second matching stage \cite{Zhang2022ByteTrack}.
+
+Although these extensions improve identity handling in crowded scenes, they increase algorithmic and 
+implementation complexity. For a single-target or dominant-target pipeline, association can be 
+simplified using IoU gating without full multi-track optimization.
+
+\subsection{Hardware-Aware Tracking Implementations}
+Edge and embedded deployments require attention to latency, throughput, and resource usage in addition 
+to accuracy. Prior surveys emphasize algorithm-hardware co-design for efficient real-time 
+systems \cite{Sze2017EfficientDNN}. Tracking kernels based on matrix and vector arithmetic are 
+especially suitable for hardware mapping. Recent work on FPGA-oriented Kalman tracking demonstrates 
+practical throughput gains and validates this direction for motion tracking systems \cite{BABU2022101084}.
 
 \subsection{Research Gap and Project Positioning}
-From the reviewed literature, three observations motivate this project:
+The reviewed literature suggests three practical gaps for deployment-focused tracking systems:
 \begin{enumerate}
-	\item High-accuracy detectors exist, but end-to-end MOT deployment on constrained platforms remains challenging.
-	\item Robust trackers with appearance models improve identity preservation but increase computational cost.
-	\item Lightweight trackers such as SORT offer a strong baseline for real-time and hardware-oriented realization.
+	\item Many high-accuracy pipelines rely on compute-intensive detection or appearance modeling 
+	that is expensive for constrained implementations.
+	\item Background-subtraction-based pipelines are efficient, but are less frequently integrated 
+	with explicit software-to-hardware tracker validation workflows.
+	\item Single-object tracking use cases can simplify association logic, but this simplification 
+	is often not described in a hardware implementation context.
 \end{enumerate}
 
-Accordingly, this work focuses on a practical detector-plus-SORT pipeline, and explores how core tracking operations can be 
-mapped toward hardware-friendly modules while preserving online behavior and low latency.
+Accordingly, this project adopts a foreground-segmentation detector with SORT-inspired state estimation, 
+then compares software reference outputs with custom hardware-oriented tracking outputs. The objective 
+is to maintain online behavior while reducing implementation complexity.
 
 \section{Tools and Technologies}
 \label{section:tools_tech}
 
-\subsection{Detection Backbone}
-The detection front-end is based on YOLO family principles, selected for its real-time characteristics and mature 
-tooling ecosystem \cite{Redmon2016YOLO, Jocher2023Ultralytics}. The literature consistently shows that stronger 
-detections directly improve downstream tracking quality, particularly for online trackers that do not rely heavily on 
-re-identification features \cite{Bewley2016_sort}.
+\subsection{Foreground Detection Stack}
+The detection front-end is based on adaptive background subtraction (MOG2) followed by contour-based 
+localization. This choice aligns with literature on low-latency motion segmentation in video scenes 
+\cite{StaufferGrimson1999, Zivkovic2004, ZivkovicHeijden2006}. OpenCV provides optimized implementations 
+for mask generation, filtering, contour extraction, and visualization \cite{Bradski2000OpenCV}.
 
 \subsection{Tracking Core}
-The tracking core follows the SORT design: a linear Kalman filter for state estimation, IoU-based gating for feasible matches, 
-and Hungarian assignment for one-to-one pairing between predictions and 
-detections \cite{Kalman1960, Kuhn1955Hungarian, Bewley2016_sort}. This combination is well-supported in literature as 
-a strong real-time baseline for MOT.
+The tracking core follows SORT principles: linear state prediction with a Kalman filter and 
+geometric validation through IoU \cite{Kalman1960, Bewley2016_sort}. Canonical SORT uses Hungarian 
+assignment in multi-object settings \cite{Kuhn1955Hungarian}; however, the current implementation 
+focuses on single-object tracking and therefore uses simplified association logic based on gating.
 
-\subsection{Software Prototyping Stack}
-Python-based prototyping with computer vision libraries is widely adopted in prior work for rapid algorithm validation. 
-OpenCV provides stable, optimized primitives for frame I/O, geometry operations, and 
-visualization \cite{Bradski2000OpenCV}. This enables quick experimentation with detector outputs and tracker parameter 
-tuning before hardware migration.
+\subsection{Software Prototyping and Reference Comparison}
+Python-based prototyping is used to generate detections, run a reference SORT flow, and produce 
+frame-aligned outputs for analysis. This supports reproducible comparison of custom tracker behavior 
+against a known software baseline.
 
 \subsection{Hardware Mapping Perspective}
-Literature on efficient inference and edge deployment motivates moving deterministic arithmetic blocks to 
-hardware \cite{Sze2017EfficientDNN}. In this project context, matrix and vector operations in prediction and update stages 
-are analyzed for resource-aware implementation, while preserving compatibility with streaming detector outputs.
+The design focus is to map deterministic arithmetic-heavy tracking blocks to hardware-friendly modules 
+while preserving online updates. This perspective is consistent with prior real-time and FPGA-oriented 
+tracking literature \cite{Sze2017EfficientDNN, BABU2022101084}.
 
 \subsection{Summary of Survey}
-The literature supports a staged approach: use a strong real-time detector, pair it with a lightweight online 
-tracker, and optimize arithmetic-heavy components for hardware execution. This directly informs the methodology of the 
-present work, where algorithmic clarity and deployment feasibility are treated as co-equal goals.
+The survey supports a practical architecture for this project: efficient foreground-based detection, 
+lightweight online tracking, and systematic software-hardware comparison. This framing informs the 
+methodology chapter and motivates the chosen trade-off between tracking robustness and implementation 
+simplicity.

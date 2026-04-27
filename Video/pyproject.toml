@@ -3,10 +3,11 @@ name = "video"
 version = "0.1.0"
 description = "This python program is to use YOLO on a Video to get bounding boxes."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "cv>=1.0.0",
     "jupyter>=1.1.1",
+    "matplotlib>=3.10.0",
     "opencv-python>=4.13.0.92",
     "ultralytics>=8.4.36",
 ]

@@ -2,6 +2,7 @@
 sort/
 Figures/
 .venv
+__pycache__*
 
 # Files
 proposal/main.*
