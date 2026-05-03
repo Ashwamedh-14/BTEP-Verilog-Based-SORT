@@ -134,7 +134,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Visualize tracker boxes on a video (reference SORT and/or custom .vvp flow output)."
     )
-    parser.add_argument("--video", type=Path, default=Path("crop_output.mp4"), help="Input video path.")
+    parser.add_argument("--video", type=Path, default=Path("test_output.mp4"), help="Input video path.")
     parser.add_argument(
         "--output",
         type=Path,
@@ -163,7 +163,7 @@ def main() -> None:
     parser.add_argument(
         "--custom-format",
         choices=["mot", "xyxy", "cxcywh", "cxcyhr", "cxcysr"],
-        default="cxcysr",
+        default="cxcyhr",
         help="Format of custom tracker output.",
     )
     parser.add_argument(

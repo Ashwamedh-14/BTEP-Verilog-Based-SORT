@@ -1,5 +1,6 @@
 # Directories
 sort/
+Poster/
 Figures/
 .venv
 __pycache__*
@@ -32,4 +33,4 @@ proposal/main.*
 *.lot
 *.out
 *.gz
-
+*.toc

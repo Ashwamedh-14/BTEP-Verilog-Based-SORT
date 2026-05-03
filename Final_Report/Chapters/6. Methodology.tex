@@ -1,4 +1,276 @@
-% Add subsections if required
-\chapter{Methodology} 
+\chapter{Methodology}
 \label{section:methodology}
-\lipsum[1-6] % example text
+
+This chapter describes the implementation flow used for the proposed object tracking 
+system. The methodology follows a SORT-inspired pipeline in which a foreground detector 
+produces bounding boxes, a Kalman-based tracker predicts the next state, and a hardware 
+controller decides whether a detection should update the track or whether the predicted 
+state should be carried forward.
+
+\section{System Overview}
+The system is designed around a single dominant object assumption. Each video frame is 
+processed to extract one bounding box, and that box is converted into the state format 
+required by the tracker. The full pipeline has three stages.
+
+\begin{enumerate}
+	\item Foreground detection and bounding-box extraction from the video stream.
+	\item State prediction and association using SORT-style motion estimation.
+	\item Hardware-oriented update logic that either applies the measurement correction 
+    or advances the track without an update.
+\end{enumerate}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=\linewidth]{Figures/0. General/Pipeline Block Diagram.png}
+	\caption{High-level block diagram of the implemented tracking pipeline, showing the flow 
+	from video input to detection, prediction, and update logic.}
+	\label{fig:pipeline_block_diagram}
+\end{figure}
+
+The implementation is intentionally lightweight so that the same input stream can be used 
+for both the Python reference flow and the Verilog controller. This makes it possible to 
+compare software and hardware behavior directly on frame-aligned data. The full pipeline
+is represented in \Cref{fig:pipeline_block_diagram}, which shows the flow from video input to
+detection, prediction, and update logic. Meanwhile, \Cref{fig:methodology_flowchart} 
+provides a more detailed view of the control flow within the tracking pipeline. 
+
+The hardware controller produces status signals that can be used to trigger saves or 
+resets in the surrounding system, and the software reference optionally runs the 
+original SORT implementation to provide a known baseline for comparison.
+
+\subsection{Methodology Flowchart}
+\label{section:methodology_flowchart}
+The end-to-end methodology is summarized in \Cref{fig:methodology_flowchart}. It captures
+the sequence from detection and prediction to IoU-based gating, metadata updates, and final
+save/reset signaling in the controller.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{Figures/0. General/FlowChart.pdf}
+	\caption{Overall methodology and control flow for the implemented tracking pipeline.}
+	\label{fig:methodology_flowchart}
+\end{figure}
+
+\section{Video Preprocessing and Detection}
+As shown in \Cref{fig:pipeline_block_diagram}, the detection stage is the first major component 
+in the processing pipeline. The detection front-end is implemented in Python using OpenCV. The video is read frame by 
+frame and a background-subtraction model based on MOG2 is used to generate a foreground 
+mask. The mask is then cleaned using thresholding, morphological opening and closing, and 
+Gaussian blurring to remove small blobs and reduce noise. After that, external contours are 
+extracted and each contour is converted into a bounding box.
+
+To reduce false detections, contours with area below a fixed threshold are ignored. When 
+more than one candidate remains, the best box is selected by balancing two factors: the 
+bounding-box area and the distance from the previous frame's box center. This gives 
+preference to large, stable regions while discouraging sudden jumps between unrelated 
+contours. The selected box is then smoothed using exponential averaging so that short-term 
+jitter is reduced before it is passed to the tracker.
+
+The detection script exports the same box in multiple formats so that each downstream 
+block receives the representation it expects. The hardware feed uses \([c_x, c_y, h, r]\), 
+while the SORT input uses \([x_1, y_1, x_2, y_2]\). This avoids repeated conversion in 
+later stages and keeps the reference and hardware paths aligned.
+
+\section{State Representation}
+The tracker follows the standard SORT state vector
+\begin{equation}
+	\mathbf{x} = \begin{bmatrix}
+		c_x & c_y & h & r & v_x & v_y & v_h
+	\end{bmatrix}^{T},
+\end{equation}
+where \(c_x\) and \(c_y\) are the box center coordinates, \(h\) is the height, \(r\) is 
+the aspect ratio, and \(v_x\), \(v_y\), and \(v_h\) model the motion of the target between 
+frames. The measurement vector is
+\begin{equation}
+	\mathbf{z} = \begin{bmatrix}
+		c_x & c_y & h & r
+	\end{bmatrix}^{T}.
+\end{equation}
+
+The corresponding covariance and noise terms are represented using diagonal 
+matrices. To simplify hardware implementation, the matrices are stored as compact 
+vectors rather than full 2D structures. The process-noise matrix \(Q\) is stored as 
+a 7-element vector containing the diagonal elements, and the measurement-noise matrix 
+\(R\) is stored as a 4-element vector. The covariance matrix \(P_{7 \times 7}\) is stored 
+as a 10-element vector containing the 7 diagonal elements and 3 distinct off-diagonal 
+covariance terms. All numerical representations use fixed-point arithmetic as specified 
+in \Cref{sec:register_sizing}.
+
+\section{Register Sizing and Numeric Format}
+\label{sec:register_sizing}
+Since the input resolution is assumed to be 640 \(\times\) 640, the minimum register 
+width is estimated from the maximum coordinate value. Using the standard sizing rule,
+\begin{equation}
+	\text{Bit Size} = \lceil \log_2(\text{Max Size}) \rceil + \text{Guard Bits},
+\end{equation}
+the coordinate registers require at least 12 bits when two guard bits are added. To 
+provide additional safety margin for intermediate results, the final implementation 
+uses 16-bit registers. Fixed-point notation FXP(\textit{int\_bits}, \textit{frac\_bits}) 
+is used throughout, where \textit{int\_bits} represents the integer width and 
+\textit{frac\_bits} represents the fractional width.
+
+The specific fixed-point formats used are as follows:
+
+\begin{itemize}
+	\item \textbf{State Vector} $\mathbf{x}$:
+	\begin{itemize}
+		\item Variables $c_x$, $c_y$, and $h$: FXP(16, 0), Unsigned (always positive)
+		\item Variable $r$: FXP(8, 8) (aspect ratio typically between 0 and 1), Unsigned
+		\item Variables $v_x$, $v_y$, and $v_h$: FXP(8, 8) (velocities can be small), Signed
+	\end{itemize}
+	\item \textbf{State Covariance Matrix} $P$:
+	\begin{itemize}
+		\item Diagonal entries: FXP(12, 4) (variance can be large), Unsigned
+		\item Off-diagonal entries: FXP(8, 8) (covariance can be small or negative), Signed
+	\end{itemize}
+	\item \textbf{Measurement Vector} $\mathbf{z}$:
+	\begin{itemize}
+		\item Variables $x$, $y$, and $h$: FXP(16, 0), Unsigned
+		\item Variable $r$: FXP(8, 8), Unsigned
+	\end{itemize}
+	\item \textbf{Noise Matrices} $Q$ and $R$:
+	\begin{itemize}
+		\item All elements: FXP(8, 8) (stored as vectors), Unsigned
+	\end{itemize}
+	\item \textbf{Innovation Covariance Matrix} $S$:
+	\begin{itemize}
+		\item All elements: FXP(12, 4), Unsigned
+	\end{itemize}
+	\item \textbf{Innovation Vector} $\mathbf{y}$:
+	\begin{itemize}
+		\item Variables $y_x$, $y_y$, and $y_h$: FXP(16, 0), Signed
+		\item Variable $y_r$: FXP(8, 8), Signed
+	\end{itemize}
+\end{itemize}
+
+\section{Prediction Stage}
+The prediction stage (shown in \Cref{fig:methodology_flowchart}) uses a constant-velocity motion model. In the hardware predictor, 
+the position terms are advanced by adding the corresponding velocity terms, while 
+the aspect ratio is kept constant. The predicted state is therefore computed as
+\begin{align}
+	c_x^{k|k-1} &= c_x^{k-1|k-1} + v_x^{k-1|k-1}, \notag \\
+	c_y^{k|k-1} &= c_y^{k-1|k-1} + v_y^{k-1|k-1}, \notag \\
+	h^{k|k-1} &= h^{k-1|k-1} + v_h^{k-1|k-1}. \notag
+\end{align}
+
+The predictor module also propagates the covariance using the diagonal noise terms 
+from $Q$. Rather than performing full dense matrix multiplication, the simplified 
+structure of the state model is exploited to update only the relevant terms. Due to 
+the diagonal structure of $Q$ and the sparsity of the state transition matrix $F$, 
+the covariance update simplifies to:
+\begin{equation}
+	P_{k|k-1} = \begin{bmatrix}
+		\sigma^2_{cx} + 2\sigma_{vx} + q_p \\
+		\sigma^2_{cy} + 2\sigma_{vy} + q_p \\
+		\sigma^2_h + 2\sigma_{vh} + q_p \\
+		\sigma^2_r + q_p \\
+		\sigma^2_{vx} + q_v \\
+		\sigma^2_{vy} + q_v \\
+		\sigma^2_{vh} + q_v \\
+		\sigma_{vx} + \sigma^2_{vx} \\
+		\sigma_{vy} + \sigma^2_{vy} \\
+		\sigma_{vh} + \sigma^2_{vh}
+	\end{bmatrix},
+\end{equation}
+where $P$ is represented as a 10-element vector (7 diagonal terms and 3 off-diagonal 
+terms), $q_p$ and $q_v$ are the position and velocity noise variances respectively, 
+and $\sigma_{ij}$ denotes the covariance terms. This vector representation keeps the 
+arithmetic cost low while preserving the essential covariance structure.
+
+\section{Association and Update Logic}
+After prediction (as detailed in \Cref{fig:methodology_flowchart}), the predicted bounding box is converted back into corner coordinates 
+and compared with the current detection using intersection over union (IoU). The IoU 
+block acts as the association gate. If the IoU is greater than the configured threshold, 
+the detection is considered a match and the controller performs a measurement update. If 
+not, the track is advanced without correction.
+
+The innovation (residual) is computed as:
+\begin{equation}
+	\mathbf{y} = \mathbf{z} - \mathbf{x}_{k|k-1} = \begin{bmatrix}
+		x - c_x^{k|k-1} \\
+		y - c_y^{k|k-1} \\
+		h - h^{k|k-1} \\
+		r - r^{k|k-1}
+	\end{bmatrix},
+\end{equation}
+and the innovation covariance is computed as:
+\begin{equation}
+	S = P + R,
+\end{equation}
+which in vector form (using only diagonal elements) yields:
+\begin{equation}
+	S = \begin{bmatrix}
+		\rho_x \\
+		\rho_y \\
+		\rho_h \\
+		\rho_r
+	\end{bmatrix} = \begin{bmatrix}
+		\sigma^2_{px} + \sigma^2_{rx} \\
+		\sigma^2_{py} + \sigma^2_{ry} \\
+		\sigma^2_{ph} + \sigma^2_{rh} \\
+		\sigma^2_{pr} + \sigma^2_{rr}
+	\end{bmatrix}.
+\end{equation}
+
+The update block then applies a diagonal Kalman-style correction. Because the implementation 
+uses diagonal noise assumptions, the Kalman gain matrix simplifies to:
+\begin{equation}
+	K = \begin{bmatrix}
+		\frac{\sigma^2_{cx}}{\rho_x} \\
+		\frac{\sigma^2_{cy}}{\rho_y} \\
+		\frac{\sigma^2_h}{\rho_h} \\
+		\frac{\sigma^2_r}{\rho_r} \\
+		\frac{\sigma_{vx}}{\rho_x} \\
+		\frac{\sigma_{vy}}{\rho_y} \\
+		\frac{\sigma_{vh}}{\rho_h}
+	\end{bmatrix},
+\end{equation}
+allowing for element-wise arithmetic instead of full matrix inversion. This makes the 
+block significantly simpler to map to hardware while preserving the essential predict-update 
+behavior of SORT. The state and covariance are then updated as:
+\begin{equation}
+	\mathbf{x}_k = \mathbf{x}_{k|k-1} + K \odot \mathbf{y},
+\end{equation}
+\begin{equation}
+	P_k = (I - KH) P_{k|k-1},
+\end{equation}
+where $\odot$ denotes element-wise multiplication.
+
+When a match is found, the controller increments the hit counter and clears the 
+time-since-update counter. When no match is found, the predicted state is retained, 
+the age counter increases, and the time-since-update counter is incremented. If the 
+time since the last update exceeds the maximum age, the reset signal is asserted so 
+that stale tracks can be cleared.
+
+\section{Hardware Controller}
+The Verilog design is organized as a finite-state machine in \texttt{SORT\_Controller}, 
+as illustrated in \Cref{fig:methodology_flowchart}. 
+The controller accepts a frame-valid pulse together with the current detection, state 
+vector, covariance vector, and the noise matrices. Internally, it sequences through the 
+following phases:
+
+\begin{enumerate}
+	\item \textbf{Idle}: wait for a valid frame.
+	\item \textbf{Predict}: generate the next state using the constant-velocity model.
+	\item \textbf{IoU check}: compare the predicted box with the detection.
+	\item \textbf{Update or no-update}: either correct the state or retain the prediction.
+	\item \textbf{Metadata update}: update age, hits, and time-since-update.
+	\item \textbf{Done}: assert the completion signal and return to idle.
+\end{enumerate}
+
+This structure separates the numeric datapath from the control logic, which is useful 
+for hardware synthesis. The controller also produces status outputs such as \texttt{busy}, 
+\texttt{done}, \texttt{matched}, \texttt{save\_signal}, and \texttt{reset\_signal} so that 
+the surrounding system can react to the current tracking state.
+
+\section{Software Reference and Validation}
+Alongside the hardware design, a Python script is used to generate detections and build 
+a software reference stream. The script records the hardware-style measurement format, 
+the SORT-style detection format, and the bounding-box format used for comparison. It also 
+optionally runs the reference SORT implementation on the same detections so that the 
+hardware-oriented output can be checked against a known baseline.
+
+This dual-flow setup is important because it ensures that the same frame sequence, the 
+same detections, and the same track assumptions are used for both the software and 
+hardware paths. As a result, any difference in output can be traced to the implementation 
+details of the controller rather than to differences in input preparation.

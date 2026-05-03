@@ -1,18 +1,57 @@
-% Names of the subsection reflect the content that is required. More subsections can be added if required. 
-
 \chapter{Results}\label{section:results}
-\lipsum[1-3] % example text
+
+The implemented tracking pipeline produced a complete software-to-hardware validation flow 
+for a single dominant object. The Python front-end generated frame-aligned detections, the 
+reference SORT implementation produced baseline tracks, and the custom hardware-oriented 
+output was compared against the reference using the scripts in the \texttt{Video} directory.
 
 \section{Project Outcomes}\label{section:proj_outcomes}
-\lipsum[1-2]
+The main outcome of the project is a lightweight SORT-inspired tracker that is suitable for 
+both software experimentation and hardware mapping. The detection stage converts video frames 
+into bounding boxes, the prediction stage advances the state using a constant-velocity model, 
+and the update stage applies IoU-based gating with Kalman-style correction. The key validation 
+metrics are summarized in \Cref{tab:result_summary}.
+
+\begin{table}[h]
+\centering
+\caption{Summary of the main validation results.}
+\label{tab:result_summary}
+\begin{tabular}{lcc p{0.2\linewidth}}
+\hline
+\textbf{Configuration} & \textbf{Mean IoU} & \textbf{Mean Center Error (px)} & \textbf{Notes} \\
+\hline
+Clean baseline & 0.0039 & 2287.64 & Very weak alignment with reference \\
+Tuned run & 0.1332 & 1924.78 & Best overall software-hardware match \\
+Best sweep IoU & 0.1452 & 2041.98 & \texttt{Q\_SCALE = 2}, \texttt{R\_H\_SCALE = 10}, \texttt{R\_R\_SCALE = 40} \\
+Best sweep center error & 0.1332 & 1924.78 & \texttt{Q\_SCALE = 4}, \texttt{R\_H\_SCALE = 20}, \texttt{R\_R\_SCALE = 40} \\
+Hardware vs Python SORT & 0.9429 & 1.05 & Direct comparison of `detections\_hw.csv` vs `tracks\_sort\_reference.csv` \\
+\hline
+\end{tabular}
+\end{table}
+
+The table shows that the tuned configuration is consistently better than the clean baseline, while the sweep confirms that tracker performance depends strongly on the balance between process noise and measurement noise. In addition, a direct frame-wise comparison between the hardware output and the Python SORT reference was performed using the `Video/compare_trackers.py` script (arguments: `--reference tracks_sort_reference.csv --custom detections_hw.csv --custom-format cxcyhr`); the script keeps the largest object per frame, computes per-frame IoU and center error, and outputs a detailed CSV. The hardware output matches the Python SORT reference closely (mean IoU = 0.9429, mean center error = 1.05 px over 326 shared frames), confirming functional equivalence for the single-dominant-object scenario.
 
 \section{My Contributions to the Project}
 \label{section:my_contribution}
-\lipsum[1-2]
+My contribution focused on implementing and validating the complete tracking flow. I developed 
+the Python preprocessing pipeline, the comparison scripts, and the fixed-point conventions used 
+for the hardware-oriented state representation. I also helped interpret the sweep results to 
+identify a practical operating point for the tracker.
 
 \section{Learning Outcomes}\label{section:learnings}
-\lipsum[1-2]
+This project improved my understanding of how a tracking algorithm changes when it moves from a 
+software setting to a hardware-oriented implementation. I learned how to simplify matrix 
+operations, choose fixed-point formats, and validate a system using multiple representations of 
+the same frame data.
 
 \section{Real World Applications}
 \label{section:real_world_app}
-\lipsum[1-2]
+The proposed design is useful in situations where a low-complexity tracker is preferred over a 
+large deep-learning-based multi-object system. Examples include industrial inspection lines, 
+simple surveillance setups, laboratory experiments, and embedded vision platforms that must keep 
+latency and resource usage low.
+
+The hardware-friendly structure also makes the project relevant for FPGA-based prototyping and 
+for systems that need deterministic per-frame behavior. While the current implementation is limited 
+to a single dominant object, the same design approach can be extended with stronger association 
+logic, multiple track management, or a more robust detector.

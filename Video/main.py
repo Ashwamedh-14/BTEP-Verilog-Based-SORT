@@ -1,20 +1,93 @@
 from pathlib import Path
 import sys
 import warnings
+from typing import Iterable
 
 import cv2
 import numpy as np
 
-VIDEO_PATH = "crop_output.mp4"
+VIDEO_PATH = "test_output.mp4"
 OUTPUT_VIDEO = "output_detected.mp4"
 HW_MEASUREMENTS_CSV = "detections_hw.csv"
-SORT_DETECTIONS_CSV = "detections_sort_input.csv"
+SORT_INPUT_CSV = "detections_sort_input.csv"
 CUSTOM_BBOX_CSV = "detections_bbox.csv"
 REFERENCE_SORT_DET = "detections_for_sort_det.txt"
 REFERENCE_SORT_TRACKS = "tracks_sort_reference.csv"
 
 # Enable this to run Python SORT (from ../sort/sort.py) directly after detection.
 RUN_REFERENCE_SORT = True
+
+MIN_CONTOUR_AREA = 1200.0
+SMOOTHING_ALPHA = 0.35
+DISTANCE_WEIGHT = 0.18
+
+
+def preprocess_mask(mask: np.ndarray) -> np.ndarray:
+    # Remove shadows from MOG2 output and clean small blobs.
+    _, binary = cv2.threshold(mask, 200, 255, cv2.THRESH_BINARY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=2)
+    return cv2.GaussianBlur(closed, (5, 5), 0)
+
+
+def contour_box(contour: np.ndarray) -> tuple[int, int, int, int]:
+    return cv2.boundingRect(contour)
+
+
+def box_center(box: tuple[float, float, float, float]) -> tuple[float, float]:
+    x, y, w, h = box
+    return (x + (w / 2.0), y + (h / 2.0))
+
+
+def choose_best_box(
+    contours: Iterable[np.ndarray],
+    previous_box: tuple[float, float, float, float] | None,
+) -> tuple[int, int, int, int] | None:
+    candidates: list[tuple[float, tuple[int, int, int, int]]] = []
+    prev_cx, prev_cy = box_center(previous_box) if previous_box is not None else (0.0, 0.0)
+
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < MIN_CONTOUR_AREA:
+            continue
+
+        box = contour_box(cnt)
+        x, y, w, h = box
+        rect_area = float(w * h)
+
+        distance_penalty = 0.0
+        if previous_box is not None:
+            cx, cy = box_center((x, y, w, h))
+            distance_penalty = ((cx - prev_cx) ** 2 + (cy - prev_cy) ** 2) ** 0.5
+
+        # Prefer larger boxes but avoid sudden center jumps.
+        score = rect_area - (DISTANCE_WEIGHT * distance_penalty * rect_area**0.5)
+        candidates.append((score, box))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda entry: entry[0], reverse=True)
+    return candidates[0][1]
+
+
+def smooth_box(
+    current_box: tuple[int, int, int, int],
+    previous_box: tuple[float, float, float, float] | None,
+    alpha: float = SMOOTHING_ALPHA,
+) -> tuple[float, float, float, float]:
+    if previous_box is None:
+        return tuple(float(v) for v in current_box)
+
+    px, py, pw, ph = previous_box
+    cx, cy, cw, ch = current_box
+    return (
+        (alpha * cx) + ((1.0 - alpha) * px),
+        (alpha * cy) + ((1.0 - alpha) * py),
+        (alpha * cw) + ((1.0 - alpha) * pw),
+        (alpha * ch) + ((1.0 - alpha) * ph),
+    )
 
 cap = cv2.VideoCapture(VIDEO_PATH)
 
@@ -37,6 +110,7 @@ cv2.namedWindow("Detections", cv2.WINDOW_NORMAL)
 cv2.resizeWindow("Detections", 800, 600)
 
 frame_index = 1
+previous_box: tuple[float, float, float, float] | None = None
 
 while True:
     ret, frame = cap.read()
@@ -44,25 +118,36 @@ while True:
         break
 
     fgmask = fgbg.apply(frame)
-    fgmask = cv2.medianBlur(fgmask, 5)
+    fgmask = preprocess_mask(fgmask)
 
     contours, _ = cv2.findContours(
         fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    max_area = 0
-    best_box = None
+    best_box = choose_best_box(contours, previous_box)
 
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
+    if best_box is not None:
+        smoothed_box = smooth_box(best_box, previous_box)
+        previous_box = smoothed_box
 
-        if area > max_area:
-            x, y, w, h = cv2.boundingRect(cnt)
-            max_area = area
-            best_box = (x, y, w, h)
+        x_f, y_f, w_f, h_f = smoothed_box
+        x = int(round(x_f))
+        y = int(round(y_f))
+        w = int(round(w_f))
+        h = int(round(h_f))
 
-    if best_box and max_area > 2000:
-        x, y, w, h = best_box
+        if w <= 0 or h <= 0:
+            frame_index += 1
+            continue
+
+        x = max(0, min(width - 1, x))
+        y = max(0, min(height - 1, y))
+        w = min(w, width - x)
+        h = min(h, height - y)
+
+        if w <= 0 or h <= 0:
+            frame_index += 1
+            continue
 
         cx = int(round(x + (w / 2.0)))
         cy = int(round(y + (h / 2.0)))
@@ -91,6 +176,8 @@ while True:
         # SORT-style input for single-object comparison:
         # frame, id, x1, y1, w, h, score
         sort_rows.append(f"{frame_index},1,{x},{y},{w},{h},1.0")
+    else:
+        previous_box = None
 
     # Show live
     cv2.imshow("Detections", frame)
@@ -109,7 +196,7 @@ out.release()
 cv2.destroyAllWindows()
 
 Path(HW_MEASUREMENTS_CSV).write_text(("\n".join(hw_rows) + "\n") if hw_rows else "", encoding="utf-8")
-Path(SORT_DETECTIONS_CSV).write_text(("\n".join(sort_rows) + "\n") if sort_rows else "", encoding="utf-8")
+Path(SORT_INPUT_CSV).write_text(("\n".join(sort_rows) + "\n") if sort_rows else "", encoding="utf-8")
 Path(CUSTOM_BBOX_CSV).write_text((("\n".join(bbox_rows) + "\n") if bbox_rows else ""), encoding="utf-8")
 Path(REFERENCE_SORT_DET).write_text((("\n".join(sort_rows) + "\n") if sort_rows else ""), encoding="utf-8")
 
@@ -178,7 +265,7 @@ def run_single_object_reference_sort(det_file: Path, output_file: Path, total_fr
 print("Saved video:", OUTPUT_VIDEO)
 print("Saved hardware feed:", HW_MEASUREMENTS_CSV)
 print("Saved custom bbox feed:", CUSTOM_BBOX_CSV)
-print("Saved SORT input:", SORT_DETECTIONS_CSV)
+print("Saved SORT input:", SORT_INPUT_CSV)
 print("Saved reference SORT detections:", REFERENCE_SORT_DET)
 
 if RUN_REFERENCE_SORT:

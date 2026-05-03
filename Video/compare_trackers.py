@@ -264,10 +264,10 @@ def main() -> None:
     parser.add_argument(
         "--custom-format",
         choices=["mot", "xyxy", "cxcywh", "cxcyhr", "cxcysr"],
-        default="cxcysr",
+        default="cxcyhr",
         help=(
             "Format of custom file. "
-            "For your current detections_sort.csv use cxcysr."
+            "For detections_sort.csv and detections_hw.csv use cxcyhr. For detections_sort_input.csv use mot."
         ),
     )
     parser.add_argument(

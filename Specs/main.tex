@@ -178,7 +178,50 @@
     \noindent From \Cref{Eq:Bit_Size}, it is clear that the minimum number of bits we should use per register should be 12. Just to be extra safe, I am going to 
     keep the register size of 16.
 
-    \noindent For fractional Fixed Point Notation, I think I will go with the FXP(8, 8).
+    \noindent For fractional Fixed Point Notation, the following convention will be used.
+    \begin{itemize}
+        \item For State Vector \(\mathbf{x}\):-
+            \begin{itemize}
+                \item Variables \(c_x\), \(c_y\), and \(h\): FXP(16, 0), Unsigned (since they can only be positive)
+                \item Variable \(r\): FXP(8, 8) (since aspect ratio is typically between 0 and 1, 
+                we can use more bits for fractional part), Unsigned (since aspect ratio is also positive)
+                \item Variables \(v_x\), \(v_y\), and \(v_h\): FXP(8, 8) (since velocity can be small, 
+                we can use more bits for fractional part), Signed (since velocity can be positive or negative)
+            \end{itemize}
+        \item For State Co-variance Matrix \(P\):- 
+            \begin{itemize}
+                \item For the diagonal entries, we can use FXP(12, 4) (since they represent variance, they can be large, but we also want to 
+                capture small variations), Unsigned (since variance is always positive)
+                \item For the off-diagonal entries, we can use FXP(8, 8) (since they represent covariance, they can be small and can also be negative), 
+                Signed (since covariance can be positive or negative)
+            \end{itemize}
+        \item For the measurement vector \(\mathbf{z}\):-
+            \begin{itemize}
+                \item Variables \(x\), \(y\), and \(h\): FXP(16, 0), Unsigned (since they can only be positive)
+                \item Variable \(r\): FXP(8, 8) (since aspect ratio is typically between 0 and 1, 
+                we can use more bits for fractional part), Unsigned (since aspect ratio is also positive)
+            \end{itemize}
+        \item For the Process Noise Matrix \(Q\) and Measurement Noise Matrix \(R\):-
+            \begin{itemize}
+                \item Since they are both diagonal matrices, we can just store the diagonal entries as a vector. For these entries, we can use FXP(8, 8) 
+                (since they represent variance, they can be large, but we also want to capture small variations), 
+                Unsigned (since variance is always positive)
+            \end{itemize}
+        \item For matrix \(S\), we can keep the elements in FXP(12, 4) (since they represent variance, they can be large, but we also want to capture 
+        small variations), Unsigned (since variance is always positive)
+
+        \item For vector \(\mathbf{y}\):-
+            \begin{itemize}
+                \item Variables \(y_x\), \(y_y\), and \(y_h\): FXP(16, 0), Signed (since they can be positive or negative)
+                \item Variable \(y_r\): FXP(8, 8) (since aspect ratio is typically between 0 and 1, we can use more bits for fractional part), 
+                Signed (since the difference in aspect ratio can be positive or negative)
+            \end{itemize}
+
+        \item For matrix \(K\), I think we won't have to directly calculate it as evidenced in \Cref{Eq:X_update} and \Cref{Eq:P-update} below. Therefore, 
+        we just have to make sure we correctly shift the bits in the multiplication of \(K\) and \(\mathbf{y}\) in the update phase, to ensure we don't lose any data.
+    \end{itemize}
+
+    \noindent With the above specifications, we can now move on to the mathematical equations that will be implemented in the hardware.
 
 
     \subsection{Predictions}
