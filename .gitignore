@@ -2,6 +2,7 @@
 sort/
 Poster/
 Figures/
+BTEP_Related/
 .venv
 __pycache__*
 
@@ -22,6 +23,7 @@ proposal/main.*
 *.csv
 *.mp4
 *.avi
+*.txt
 
 ## Tex Genrated Files
 *.aux
