@@ -24,8 +24,6 @@ Design and evaluate a hardware-friendly object tracker that approximates a softw
   - Includes parameter sweep script: `sweep_qr.sh`
 - `Specs/`
   - Technical specification document (`main.tex`) and build helper (`compile.sh`)
-- `Related Works/`
-  - Supporting references/materials
 
 ## End-to-End Workflow
 
